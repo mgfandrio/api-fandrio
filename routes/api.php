@@ -55,6 +55,6 @@ Route::middleware(['api.key', 'auth:api', 'role:3'])->prefix('admin')->group(fun
 // Routes pour la gestion des chauffeurs (admin compagnie)
 Route::middleware(['api.key', 'auth:api', 'role:2'])->prefix('adminCompagnie')->group(function () {
     Route::prefix('chauffeur')->group(function () {
-        Route::post('/ajout', [ChauffeurController::class, 'ajouterChauffeur']);
+        Route::post('/ajout', [ChauffeurController::class, 'ajouterChauffeur']);                // ajout nouveau chauffeur
     });
 });

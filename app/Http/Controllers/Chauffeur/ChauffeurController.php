@@ -24,13 +24,13 @@ class ChauffeurController extends Controller
             // Succes de l' ajout chauffeur
             return response()->json([
                 'status'  => true,
-                'message' => 'Le chauffeur a bien ete ajoute avec succes',
+                'message' => 'Le chauffeur ' . $chauffeur->chauff_nom . ' ' . $chauffeur->chauff_prenom . ' a bien ete ajoute avec succes',
                 'data'    => $chauffeur
             ], 201);
         } catch (\Exception $e) {
             return response()->json([
                 'statut' => false,
-                'message' => $e->getMessage()
+                'message' => 'Ajout d\' un nouveau chauffeur echoue: ' . $e->getMessage()
             ], 500);
         }
     }

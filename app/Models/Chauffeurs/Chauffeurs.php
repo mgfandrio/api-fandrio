@@ -4,18 +4,14 @@ namespace App\Models\Chauffeurs;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use App\Models\Chauffeurs\Chauffeurs;
-use App\Models\Compagnies\Compagnie;
-
 
 class Chauffeurs extends Model
 {
     use HasFactory;
-    
-    protected $table = 'fandrio_app.chauffeurs';
-    // protected $schema = 'fandrio_app';
+
     protected $primaryKey = 'chauff_id';
-    
+    protected $table = 'fandrio_app.chauffeurs';
+
     protected $fillable = [
         'chauff_nom',
         'chauff_prenom',

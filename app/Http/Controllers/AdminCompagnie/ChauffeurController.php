@@ -19,7 +19,7 @@ class ChauffeurController extends Controller
                 'chauff_prenom' => 'required|string|max:100',
                 'chauff_age'    => 'required|integer|min:18',
                 'chauff_cin'    => 'required|string|unique:chauffeurs,chauff_cin',
-                'chauff_permis' => 'required|string',
+                'chauff_permis' => 'required|string|in:A,B,C,D',
                 'chauff_phone'  => 'required|string|max:20',
                 'chauff_statut' => 'required|integer',
                 'chauff_photo'  => 'nullable|image|max:2048',
@@ -29,9 +29,9 @@ class ChauffeurController extends Controller
 
             // Stockage de la photo dans public/chauffeurs
             // ainsi que ce chemin dans la base de donnees
-            if ($request->hasFile('photo')) {
-                $validationDesDonnees['chauff_photo'] = $request->file('photo')
-                                                                ->store('chauffeurs', 'public');
+            if ($request->hasFile('chauff_photo')) {
+                $validationDesDonnees['chauff_photo'] = $request->file('chauff_photo')
+                    ->store('chauffeurs', 'public');
             }
 
             // Ajout d' un chauffeur dans la base de donnees
@@ -43,13 +43,11 @@ class ChauffeurController extends Controller
                 'message' => 'Le chauffeur a bien ete ajoute avec succes',
                 'data'    => $chauffeur
             ], 201);
-
         } catch (\Exception $e) {
             return response()->json([
                 'statut' => false,
                 'message' => $e->getMessage()
             ], 500);
         }
-    
     }
 }

@@ -1,7 +1,9 @@
 <?php
 
+use App\Http\Controllers\AdminCompagnie\ChauffeurController;
 use App\Http\Controllers\Auth\AuthentificationController;
 use App\Http\Controllers\Compagnies\CompagnieController;
+use App\Http\Controllers\Admin\UtilisateurController;
 use Illuminate\Support\Facades\Route;
 
 // Routes publiques (nécessitent seulement la clé API)
@@ -46,5 +48,13 @@ Route::middleware(['api.key', 'auth:api', 'role:3'])->prefix('admin')->group(fun
         Route::patch('/{id}/reactiver', [UtilisateurController::class, 'reactiver']);
         Route::patch('/{id}/statut', [UtilisateurController::class, 'changerStatut']);
         Route::delete('/delete/{id}', [UtilisateurController::class, 'supprimer']);
+    });
+});
+
+
+// Routes pour la gestion des chauffeurs (admin compagnie)
+Route::middleware(['api.key', 'auth:api', 'role:2'])->prefix('adminCompagnie')->group(function () {
+    Route::prefix('chauffeur')->group(function () {
+        Route::post('/ajouterChauffeur', [ChauffeurController::class, 'ajouterChauffeur']);
     });
 });

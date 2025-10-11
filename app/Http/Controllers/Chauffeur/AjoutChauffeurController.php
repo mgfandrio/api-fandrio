@@ -2,15 +2,15 @@
 
 namespace App\Http\Controllers\Chauffeur;
 
-use App\Services\Chauffeur\ChauffeurService;
-use App\Http\Controllers\Controller;
-use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use App\DTOs\ChauffeurDTO;
+use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
+use App\Http\Controllers\Controller;
+use App\Services\Chauffeur\ChauffeurService;
 
-class ChauffeurController extends Controller
+class AjoutChauffeurController extends Controller
 {
-    //  Ajout d' un nouveau chauffeur
+    # Ajout d' un nouveau chauffeur
     public function ajouterChauffeur(Request $request, ChauffeurService $chauffeurService): JsonResponse
     {
         try {

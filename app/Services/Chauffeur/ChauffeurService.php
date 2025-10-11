@@ -4,6 +4,7 @@ namespace App\Services\Chauffeur;
 
 use App\DTOs\ChauffeurDTO;
 use App\Models\Chauffeurs\Chauffeurs;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Http\UploadedFile as HttpUploadedFile;
 
 class ChauffeurService
@@ -19,5 +20,34 @@ class ChauffeurService
         }
 
         return Chauffeurs::create($donneesChauffeur);
+    }
+
+
+    public function trouverUnChauffeur(int $idChauffeur): ?Chauffeurs
+    {
+        return Chauffeurs::find($idChauffeur);
+    }
+
+
+    public function modifierChauffeur(int $idChauffeur, ChauffeurDTO $chauffeurDto, ?HttpUploadedFile $photoChauffeurAjour = null): ?Chauffeurs
+    {
+        $chauffeur = $this->trouverUnChauffeur($idChauffeur);
+
+        if (!$idChauffeur) return null;
+
+        $donneesChauffeur = $chauffeurDto->convertionDonneesEnTableau();
+
+        // Gestion de la photo
+        if ($photoChauffeurAjour) {
+
+            if ($chauffeur->chauff_photo) {     //Suppression de l' ancienne photo si elle existe
+                Storage::disk('public')->delete($chauffeur->chauff_photo);
+            }
+
+            $donneesChauffeur['chauff_photo'] = $photoChauffeurAjour->store('public', 'chauffeurs');
+        }
+
+        $chauffeur->update();
+        return $chauffeur->fresh();
     }
 }

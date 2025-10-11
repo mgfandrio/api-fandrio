@@ -6,6 +6,8 @@ use App\Models\Chauffeurs\Chauffeurs;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use App\DTOs\ChauffeurDTO;
+
 
 class ChauffeurController extends Controller
 {
@@ -14,18 +16,7 @@ class ChauffeurController extends Controller
     {
         try {
 
-            $validationDesDonnees = $request->validate([
-                'chauff_nom'    => 'required|string|max:100',
-                'chauff_prenom' => 'required|string|max:100',
-                'chauff_age'    => 'required|integer|min:18',
-                'chauff_cin'    => 'required|string|unique:chauffeurs,chauff_cin',
-                'chauff_permis' => 'required|string|in:A,B,C,D',
-                'chauff_phone'  => 'required|string|max:20',
-                'chauff_statut' => 'required|integer',
-                'chauff_photo'  => 'nullable|image|max:2048',
-                'comp_id'       => 'required|integer|exists:compagnies,comp_id'
-            ]);
-
+            $validationDesDonnees = $request->validate(ChauffeurDTO::validationDonnees());
 
             // Stockage de la photo dans public/chauffeurs
             // ainsi que ce chemin dans la base de donnees
@@ -35,7 +26,8 @@ class ChauffeurController extends Controller
             }
 
             // Ajout d' un chauffeur dans la base de donnees
-            $chauffeur = Chauffeurs::create($validationDesDonnees);
+            $chauffeurDTO = ChauffeurDTO::creationObjet($validationDesDonnees);
+            $chauffeur = Chauffeurs::create($chauffeurDTO->convertionDonneesEnTableau());
 
             // Succes de l' ajout chauffeur
             return response()->json([

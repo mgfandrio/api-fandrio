@@ -2,32 +2,24 @@
 
 namespace App\Http\Controllers\Chauffeur;
 
-use App\Models\Chauffeurs\Chauffeurs;
+use App\Services\Chauffeur\ChauffeurService;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use App\DTOs\ChauffeurDTO;
 
-
 class ChauffeurController extends Controller
 {
     //  Ajout d' un nouveau chauffeur
-    public function ajouterChauffeur(Request $request): JsonResponse
+    public function ajouterChauffeur(Request $request, ChauffeurService $chauffeurService): JsonResponse
     {
         try {
 
             $validationDesDonnees = $request->validate(ChauffeurDTO::validationDonnees());
 
-            // Stockage de la photo dans public/chauffeurs
-            // ainsi que ce chemin dans la base de donnees
-            if ($request->hasFile('chauff_photo')) {
-                $validationDesDonnees['chauff_photo'] = $request->file('chauff_photo')
-                    ->store('chauffeurs', 'public');
-            }
-
-            // Ajout d' un chauffeur dans la base de donnees
+            // Ajout d' un chauffeur a partir via service
             $chauffeurDTO = ChauffeurDTO::creationObjet($validationDesDonnees);
-            $chauffeur = Chauffeurs::create($chauffeurDTO->convertionDonneesEnTableau());
+            $chauffeur = $chauffeurService->ajouterChauffeur($chauffeurDTO, $request->file('chauff_photo'));
 
             // Succes de l' ajout chauffeur
             return response()->json([

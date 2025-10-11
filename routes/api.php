@@ -1,6 +1,6 @@
 <?php
 
-use App\Http\Controllers\AdminCompagnie\ChauffeurController;
+use App\Http\Controllers\Chauffeur\ChauffeurController;
 use App\Http\Controllers\Auth\AuthentificationController;
 use App\Http\Controllers\Compagnies\CompagnieController;
 use App\Http\Controllers\Admin\UtilisateurController;
@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Route;
 Route::middleware(['api.key'])->group(function () {
     // Connexion pour tous les types d'utilisateurs
     Route::post('/connexion', [AuthentificationController::class, 'connexion']);
-    
+
     // Inscription seulement pour les clients
     Route::post('/inscription', [AuthentificationController::class, 'inscription']);
 });

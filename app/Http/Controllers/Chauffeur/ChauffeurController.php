@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\AdminCompagnie;
+namespace App\Http\Controllers\Chauffeur;
 
 use App\Models\Chauffeurs\Chauffeurs;
 use App\Http\Controllers\Controller;

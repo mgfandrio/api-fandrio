@@ -23,7 +23,7 @@ class AjoutChauffeurController extends Controller
 
             // Succes de l' ajout chauffeur
             return response()->json([
-                'status'  => true,
+                'statut'  => true,
                 'message' => 'Le chauffeur ' . $chauffeur->chauff_nom . ' ' . $chauffeur->chauff_prenom . ' a bien ete ajoute avec succes',
                 'data'    => $chauffeur
             ], 201);

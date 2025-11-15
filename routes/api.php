@@ -1,16 +1,20 @@
 <?php
 
+use App\Http\Controllers\Chauffeur\ModificationChauffeurController;
+use App\Http\Controllers\Chauffeur\AjoutChauffeurController;
+use App\Http\Controllers\Voiture\AjoutVoitureController;
 use App\Http\Controllers\Auth\AuthentificationController;
 use App\Http\Controllers\Compagnies\CompagnieController;
 use App\Http\Controllers\Provinces\ProvinceController;
 use App\Http\Controllers\Utilisateurs\UtilisateurController;
+use App\Http\Controllers\Admin\UtilisateurController;
 use Illuminate\Support\Facades\Route;
 
 // Routes publiques (nécessitent seulement la clé API)
 Route::middleware(['api.key'])->group(function () {
     // Connexion pour tous les types d'utilisateurs
     Route::post('/connexion', [AuthentificationController::class, 'connexion']);
-    
+
     // Inscription seulement pour les clients
     Route::post('/inscription', [AuthentificationController::class, 'inscription']);
 });
@@ -60,5 +64,23 @@ Route::middleware(['api.key', 'auth:api', 'role:3'])->prefix('admin')->group(fun
         Route::put('/miseAjourProvince/{id}', [ProvinceController::class, 'update']);
         Route::delete('/supprimerProvince/{id}', [ProvinceController::class, 'destroy']);
         Route::delete('/supprimerPlusieursProvince', [ProvinceController::class, 'destroyMultiple']);
+    });
+});
+
+
+// Routes pour la gestion des chauffeurs (role:2 => admin compagnie)
+Route::middleware(['api.key', 'auth:api', 'role:2'])->prefix('adminCompagnie')->group(function () {
+    Route::prefix('chauffeur')->group(function () {
+        Route::post('/ajout', [AjoutChauffeurController::class, 'ajouterChauffeur']);                       // ajout nouveau chauffeur
+
+        Route::put('/modification/{id}', [ModificationChauffeurController::class, 'modifierChauffeur']);    // modif chauffeur existant
+        Route::patch('/modification/{id}', [ModificationChauffeurController::class, 'modifierChauffeur']);
+    });
+});
+
+// Routes pour la gestion des voitures (role: 2 => admin compagnie)
+Route::middleware(['api.key', 'auth:api', 'role: 2'])->prefix('adminCompagnie')->group(function () {
+    Route::prefix('voiture')->group(function () {
+        Route::post('/ajout', [AjoutVoitureController::class, 'ajouterVoiture']);
     });
 });

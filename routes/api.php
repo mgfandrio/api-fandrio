@@ -67,18 +67,16 @@ Route::middleware(['api.key', 'auth:api', 'role:3'])->prefix('admin')->group(fun
 });
 
 
-// Routes pour la gestion des chauffeurs (role:2 => admin compagnie)
 Route::middleware(['api.key', 'auth:api', 'role:2'])->prefix('adminCompagnie')->group(function () {
+    // Routes pour la gestion des chauffeurs
     Route::prefix('chauffeur')->group(function () {
         Route::post('/ajout', [AjoutChauffeurController::class, 'ajouterChauffeur']);                       // ajout nouveau chauffeur
 
         Route::put('/modification/{id}', [ModificationChauffeurController::class, 'modifierChauffeur']);    // modif chauffeur existant
         Route::patch('/modification/{id}', [ModificationChauffeurController::class, 'modifierChauffeur']);
     });
-});
 
-// Routes pour la gestion des voitures (role: 2 => admin compagnie)
-Route::middleware(['api.key', 'auth:api', 'role: 2'])->prefix('adminCompagnie')->group(function () {
+    // Routes pour la gestion des voitures
     Route::prefix('voiture')->group(function () {
         Route::post('/ajout', [AjoutVoitureController::class, 'ajouterVoiture']);
     });

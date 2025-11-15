@@ -10,8 +10,7 @@ class Reservation extends Model
 {
     use HasFactory;
 
-    protected $connection = 'fandrio_app';
-    protected $table = 'reservations';
+    protected $table = 'fandrio_app.reservations';
     protected $primaryKey = 'res_id';
 
     protected $fillable = [

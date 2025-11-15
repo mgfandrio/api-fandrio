@@ -6,7 +6,6 @@ use App\Http\Controllers\Voiture\AjoutVoitureController;
 use App\Http\Controllers\Auth\AuthentificationController;
 use App\Http\Controllers\Compagnies\CompagnieController;
 use App\Http\Controllers\Provinces\ProvinceController;
-use App\Http\Controllers\Utilisateurs\UtilisateurController;
 use App\Http\Controllers\Admin\UtilisateurController;
 use Illuminate\Support\Facades\Route;
 

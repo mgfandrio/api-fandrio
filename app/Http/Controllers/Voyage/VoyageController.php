@@ -66,8 +66,8 @@ class VoyageController extends Controller
             $request->validate([
                 'voyage_date' => 'required|date|after:today',
                 'voyage_heure_depart' => 'required|date_format:H:i',
-                'traj_id' => 'required|integer|exists:fandrio_app.trajets,traj_id',
-                'voit_id' => 'required|integer|exists:fandrio_app.voitures,voit_id',
+                'traj_id' => 'required|integer|exists:trajets,traj_id',
+                'voit_id' => 'required|integer|exists:voitures,voit_id',
                 'voyage_type' => 'sometimes|integer|in:1,2',
                 'places_disponibles' => 'required|integer|min:1'
             ]);
@@ -128,8 +128,8 @@ class VoyageController extends Controller
             $request->validate([
                 'voyage_date' => 'required|date|after:today',
                 'voyage_heure_depart' => 'required|date_format:H:i',
-                'traj_id' => 'required|integer|exists:fandrio_app.trajets,traj_id',
-                'voit_id' => 'required|integer|exists:fandrio_app.voitures,voit_id',
+                'traj_id' => 'required|integer|exists:trajets,traj_id',
+                'voit_id' => 'required|integer|exists:voitures,voit_id',
                 'voyage_type' => 'sometimes|integer|in:1,2',
                 'places_disponibles' => 'required|integer|min:1'
             ]);

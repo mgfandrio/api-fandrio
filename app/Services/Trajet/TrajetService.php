@@ -4,7 +4,7 @@ namespace App\Services\Trajet;
 
 use App\Models\Trajet\Trajet;
 use App\Models\Compagnies\Compagnie;
-use App\DTOs\Trajet\TrajetDTO;
+use App\DTOs\TrajetDTO;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 

@@ -64,8 +64,8 @@ class TrajetController extends Controller
         try {
             $request->validate([
                 'traj_nom' => 'required|string|max:200',
-                'pro_depart' => 'required|integer|exists:fandrio_app.provinces,pro_id',
-                'pro_arrivee' => 'required|integer|exists:fandrio_app.provinces,pro_id|different:pro_depart',
+                'pro_depart' => 'required|integer|exists:provinces,pro_id',
+                'pro_arrivee' => 'required|integer|exists:provinces,pro_id|different:pro_depart',
                 'traj_tarif' => 'required|numeric|min:0',
                 'traj_km' => 'nullable|integer|min:1',
                 'traj_duree' => 'nullable|string|max:50'
@@ -73,7 +73,7 @@ class TrajetController extends Controller
 
             $trajetDTO = TrajetDTO::fromRequest($request->all());
             $trajet = $this->trajetService->creerTrajet($trajetDTO);
-
+      
             return response()->json([
                 'statut' => true,
                 'message' => 'Trajet créé avec succès',
@@ -125,8 +125,8 @@ class TrajetController extends Controller
         try {
             $request->validate([
                 'traj_nom' => 'required|string|max:200',
-                'pro_depart' => 'required|integer|exists:fandrio_app.provinces,pro_id',
-                'pro_arrivee' => 'required|integer|exists:fandrio_app.provinces,pro_id|different:pro_depart',
+                'pro_depart' => 'required|integer|exists:provinces,pro_id',
+                'pro_arrivee' => 'required|integer|exists:provinces,pro_id|different:pro_depart',
                 'traj_tarif' => 'required|numeric|min:0',
                 'traj_km' => 'nullable|integer|min:1',
                 'traj_duree' => 'nullable|string|max:50'

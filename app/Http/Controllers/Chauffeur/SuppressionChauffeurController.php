@@ -9,7 +9,7 @@ use App\Services\Chauffeur\ChauffeurService;
 
 class SuppressionChauffeurController extends Controller
 {
-    public function supprimerChauffeur(Request $request, int $idChauffeur, ChauffeurService $chauffeurService): JsonResponse
+    public function supprimerChauffeur(int $idChauffeur, ChauffeurService $chauffeurService): JsonResponse
     {
         $chauffeur = $chauffeurService->trouverUnChauffeur($idChauffeur);
 

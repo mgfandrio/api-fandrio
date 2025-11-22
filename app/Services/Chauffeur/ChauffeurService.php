@@ -50,4 +50,23 @@ class ChauffeurService
         $chauffeur->update();
         return $chauffeur->fresh();
     }
+
+    public function supprimerChauffeur(int $idChauffeur): ?Chauffeurs
+    {
+        $chauffeur = $this->trouverUnChauffeur($idChauffeur);
+
+        if (!$chauffeur) {
+            return null;
+        }
+
+        // Suppression de la photo du chauffeur si elle existe
+        if ($chauffeur->chauff_photo) {
+            Storage::disk('public')->delete($chauffeur->chauff_photo);
+        }
+
+        $chauffeur->chauff_statut = 2; // Désactivation du chauffeur au lieu de la suppression
+        $chauffeur->update();
+
+        return $chauffeur;
+    }
 }

@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Chauffeur\ModificationChauffeurController;
+use App\Http\Controllers\Chauffeur\SuppressionChauffeurController;
 use App\Http\Controllers\Chauffeur\AjoutChauffeurController;
 use App\Http\Controllers\Voiture\AjoutVoitureController;
 use App\Http\Controllers\Auth\AuthentificationController;
@@ -74,6 +75,8 @@ Route::middleware(['api.key', 'auth:api', 'role:2'])->prefix('adminCompagnie')->
 
         Route::put('/modification/{id}', [ModificationChauffeurController::class, 'modifierChauffeur']);    // modif chauffeur existant
         Route::patch('/modification/{id}', [ModificationChauffeurController::class, 'modifierChauffeur']);
+
+        Route::put('/suppression/{id}', [SuppressionChauffeurController::class, 'supprimerChauffeur']);
     });
 
     // Routes pour la gestion des voitures

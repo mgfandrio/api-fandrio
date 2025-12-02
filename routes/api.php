@@ -100,7 +100,7 @@ Route::middleware(['api.key', 'auth:api', 'role:2'])->prefix('adminCompagnie')->
     Route::prefix('voyage')->group(function () {
         Route::get('/recupererListeVoyage', [VoyageController::class, 'index']);
         Route::get('/statistiques', [VoyageController::class, 'statistiques']);
-        Route::post('/creerVoyage', [VoyageController::class, 'store']);
+        Route::post('/programmerVoyage', [VoyageController::class, 'store']);
         Route::get('/detailVoyage/{id}', [VoyageController::class,  'show']);
         Route::put('/updateVoyage/{id}', [VoyageController::class, ' update']);
         Route::patch('/{id}/annuler', [VoyageController::class, 'annuler']);

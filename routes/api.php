@@ -8,6 +8,8 @@ use App\Http\Controllers\Auth\AuthentificationController;
 use App\Http\Controllers\Compagnies\CompagnieController;
 use App\Http\Controllers\Provinces\ProvinceController;
 use App\Http\Controllers\Admin\UtilisateurController;
+use App\Http\Controllers\Trajet\TrajetController;
+use App\Http\Controllers\Voyage\VoyageController;
 use Illuminate\Support\Facades\Route;
 
 // Routes publiques (nécessitent seulement la clé API)
@@ -82,5 +84,25 @@ Route::middleware(['api.key', 'auth:api', 'role:2'])->prefix('adminCompagnie')->
     // Routes pour la gestion des voitures
     Route::prefix('voiture')->group(function () {
         Route::post('/ajout', [AjoutVoitureController::class, 'ajouterVoiture']);
+    });
+
+    // Route pour la gestion des trajets
+    Route::prefix('trajet')->group(function () {
+        Route::get('/recupererListeTrajet', [TrajetController::class, 'index']);
+        Route::get('/statistiques', [TrajetController::class, 'statistiques']);
+        Route::post('/creerTrajet', [TrajetController::class, 'store']);
+        Route::get('/detailTrajet/{id}', [TrajetController::class,  'show']);
+        Route::put('/updateTrajet/{id}', [TrajetController::class, ' update']);
+        Route::patch('/{id}/statut', [TrajetController::class, 'changerStatut']);
+    });
+
+    // Route pour la gestion des voyages
+    Route::prefix('voyage')->group(function () {
+        Route::get('/recupererListeVoyage', [VoyageController::class, 'index']);
+        Route::get('/statistiques', [VoyageController::class, 'statistiques']);
+        Route::post('/programmerVoyage', [VoyageController::class, 'store']);
+        Route::get('/detailVoyage/{id}', [VoyageController::class,  'show']);
+        Route::put('/updateVoyage/{id}', [VoyageController::class, ' update']);
+        Route::patch('/{id}/annuler', [VoyageController::class, 'annuler']);
     });
 });

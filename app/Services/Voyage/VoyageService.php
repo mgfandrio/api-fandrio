@@ -4,7 +4,7 @@ namespace App\Services\voyage;
 
 use App\Models\Voyages\Voyage;
 use App\Models\Trajet\Trajet;
-use App\Models\Voiture\Voiture;
+use App\Models\Voitures\Voitures;
 use App\DTOs\VoyageDTO;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
@@ -40,13 +40,13 @@ class VoyageService
 
             // Vérifier que le trajet appartient à la compagnie
             $trajet =  Trajet::where('comp_id', $compagnieId)
-                ->findOrFail($voyageDTO->trajetId);
+                ->findOrFail($voyageDTO->trajId);
 
             // Vérifier que la voiture appartient à la compagnie et est active
-            $voiture = Voiture::where('comp_id', $compagnieId)
+            $voiture = Voitures::where('comp_id', $compagnieId)
                 ->where('voit_statut', 1)
                 ->findOrFail($voyageDTO->voitId);
-
+       
             // Vérifier que la voiture est disponible pour cette date
             if (!$voiture->estDisponiblePourDate($voyageDTO->voyageDate)) {
                 throw new \Exception('Cette voiture n\'est pas disponible pour la date sélectionnée');

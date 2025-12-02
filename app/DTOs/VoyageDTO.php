@@ -7,7 +7,7 @@ class VoyageDTO
     public function __construct(
         public string $voyageDate,
         public string $voyageHeureDepart,
-        public int $trajetId,
+        public int $trajId,
         public int $voitId,
         public int $voyageType = 1,
         public int $placesDisponibles
@@ -33,7 +33,7 @@ class VoyageDTO
             throw new \Exception('La date et heure de départ doivent être dans le futur');
         }
 
-        if ($this->placeDisponibles <= 0) {
+        if ($this->placesDisponibles <= 0) {
             throw new \Exception('Le nombre de places disponibles doit être supérieur à 0');
         }
 

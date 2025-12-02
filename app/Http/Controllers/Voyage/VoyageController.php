@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Controller\Voyage;
+namespace App\Http\Controllers\Voyage;
 
 use App\Http\Controllers\Controller;
 use App\Services\Voyage\VoyageService;

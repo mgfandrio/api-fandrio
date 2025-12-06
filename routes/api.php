@@ -3,6 +3,7 @@
 use App\Http\Controllers\Chauffeur\ChangementEtatChauffeurController;
 use App\Http\Controllers\Chauffeur\ModificationChauffeurController;
 use App\Http\Controllers\Chauffeur\SuppressionChauffeurController;
+use App\Http\Controllers\Chauffeur\RecuperationListeChauffeur;
 use App\Http\Controllers\Chauffeur\AjoutChauffeurController;
 use App\Http\Controllers\Voiture\AjoutVoitureController;
 use App\Http\Controllers\Auth\AuthentificationController;
@@ -59,6 +60,8 @@ Route::middleware(['api.key', 'auth:api', 'role:3'])->prefix('admin')->group(fun
 Route::middleware(['api.key', 'auth:api', 'role:2'])->prefix('adminCompagnie')->group(function () {
     // Routes pour la gestion des chauffeurs
     Route::prefix('chauffeur')->group(function () {
+        Route::get('/liste', [RecuperationListeChauffeur::class, 'listeChauffeurs']);                     // liste des chauffeurs
+
         Route::post('/ajout', [AjoutChauffeurController::class, 'ajouterChauffeur']);                       // ajout nouveau chauffeur
 
         Route::put('/modification/{id}', [ModificationChauffeurController::class, 'modifierChauffeur']);    // modif chauffeur existant

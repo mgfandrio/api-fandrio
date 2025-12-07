@@ -6,6 +6,7 @@ use App\Http\Controllers\Chauffeur\SuppressionChauffeurController;
 use App\Http\Controllers\Chauffeur\RecuperationListeChauffeur;
 use App\Http\Controllers\Chauffeur\ConsulterDetailsChauffeur;
 use App\Http\Controllers\Chauffeur\AjoutChauffeurController;
+use App\Http\Controllers\Voiture\ConsulterDetailsVoiture;
 use App\Http\Controllers\Voiture\RecuperationListeVoiture;
 use App\Http\Controllers\Voiture\AjoutVoitureController;
 use App\Http\Controllers\Auth\AuthentificationController;
@@ -63,7 +64,7 @@ Route::middleware(['api.key', 'auth:api', 'role:2'])->prefix('adminCompagnie')->
     // Routes pour la gestion des chauffeurs
     Route::prefix('chauffeur')->group(function () {
         Route::get('/liste', [RecuperationListeChauffeur::class, 'listeChauffeurs']);                                   // liste des chauffeurs
-        Route::get('/details/{id}', [ConsulterDetailsChauffeur::class, 'detailChauffeur']);                             // detail chauffeur
+        Route::get('/details/{id}', [ConsulterDetailsChauffeur::class, 'detailChauffeur']);                             // details chauffeur
 
         Route::post('/ajout', [AjoutChauffeurController::class, 'ajouterChauffeur']);                                   // ajout nouveau chauffeur
 
@@ -78,6 +79,7 @@ Route::middleware(['api.key', 'auth:api', 'role:2'])->prefix('adminCompagnie')->
     // Routes pour la gestion des voitures
     Route::prefix('voiture')->group(function () {
         Route::get('/liste', [RecuperationListeVoiture::class, 'listeVoitures']);                                       // liste des voitures
+        Route::get('/details/{id}', [ConsulterDetailsVoiture::class, 'detailVoiture']);                                   // detail svoiture
 
         Route::post('/ajout', [AjoutVoitureController::class, 'ajouterVoiture']);
     });

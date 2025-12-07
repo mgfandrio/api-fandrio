@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Voiture;
 use App\Models\Voitures\Voitures;
 use App\Http\Controllers\Controller;
 
-class RecuperationListeVoiture extends Controller
+class RecuperationListeVoitureController extends Controller
 {
     public function listeVoitures()
     {

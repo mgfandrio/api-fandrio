@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Voiture;
 use App\Http\Controllers\Controller;
 use App\Services\Voiture\VoitureService;
 
-class ConsulterDetailsVoiture extends Controller
+class ConsulterDetailsVoitureController extends Controller
 {
     public function detailVoiture(int $idVoiture)
     {

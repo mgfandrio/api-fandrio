@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Chauffeur;
 use App\Http\Controllers\Controller;
 use App\Services\Chauffeur\ChauffeurService;
 
-class ConsulterDetailsChauffeur extends Controller
+class ConsulterDetailsChauffeurController extends Controller
 {
     public function detailChauffeur(int $idChauffeur)
     {

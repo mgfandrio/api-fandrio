@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Chauffeur;
 use App\Http\Controllers\Controller;
 use App\Models\Chauffeurs\Chauffeurs;
 
-class RecuperationListeChauffeur extends Controller
+class RecuperationListeChauffeurController extends Controller
 {
     public function listeChauffeurs()
     {

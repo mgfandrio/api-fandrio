@@ -1,13 +1,14 @@
 <?php
 
+use App\Http\Controllers\Chauffeur\RecuperationListeChauffeurController;
+use App\Http\Controllers\Chauffeur\ConsulterDetailsChauffeurController;
 use App\Http\Controllers\Chauffeur\ChangementEtatChauffeurController;
+use App\Http\Controllers\Voiture\RecuperationListeVoitureController;
 use App\Http\Controllers\Chauffeur\ModificationChauffeurController;
+use App\Http\Controllers\Voiture\ConsulterDetailsVoitureController;
 use App\Http\Controllers\Chauffeur\SuppressionChauffeurController;
-use App\Http\Controllers\Chauffeur\RecuperationListeChauffeur;
-use App\Http\Controllers\Chauffeur\ConsulterDetailsChauffeur;
+use App\Http\Controllers\Voiture\ModificationVoitureController;
 use App\Http\Controllers\Chauffeur\AjoutChauffeurController;
-use App\Http\Controllers\Voiture\ConsulterDetailsVoiture;
-use App\Http\Controllers\Voiture\RecuperationListeVoiture;
 use App\Http\Controllers\Voiture\AjoutVoitureController;
 use App\Http\Controllers\Auth\AuthentificationController;
 use App\Http\Controllers\Compagnies\CompagnieController;
@@ -63,8 +64,8 @@ Route::middleware(['api.key', 'auth:api', 'role:3'])->prefix('admin')->group(fun
 Route::middleware(['api.key', 'auth:api', 'role:2'])->prefix('adminCompagnie')->group(function () {
     // Routes pour la gestion des chauffeurs
     Route::prefix('chauffeur')->group(function () {
-        Route::get('/liste', [RecuperationListeChauffeur::class, 'listeChauffeurs']);                                   // liste des chauffeurs
-        Route::get('/details/{id}', [ConsulterDetailsChauffeur::class, 'detailChauffeur']);                             // details chauffeur
+        Route::get('/liste', [RecuperationListeChauffeurController::class, 'listeChauffeurs']);                                   // liste des chauffeurs
+        Route::get('/details/{id}', [ConsulterDetailsChauffeurController::class, 'detailChauffeur']);                             // details chauffeur
 
         Route::post('/ajout', [AjoutChauffeurController::class, 'ajouterChauffeur']);                                   // ajout nouveau chauffeur
 
@@ -78,9 +79,9 @@ Route::middleware(['api.key', 'auth:api', 'role:2'])->prefix('adminCompagnie')->
 
     // Routes pour la gestion des voitures
     Route::prefix('voiture')->group(function () {
-        Route::get('/liste', [RecuperationListeVoiture::class, 'listeVoitures']);                                       // liste des voitures
-        Route::get('/details/{id}', [ConsulterDetailsVoiture::class, 'detailVoiture']);                                   // detail svoiture
+        Route::get('/liste', [RecuperationListeVoitureController::class, 'listeVoitures']);                             // liste des voitures
+        Route::get('/details/{id}', [ConsulterDetailsVoitureController::class, 'detailVoiture']);                       // details voiture
 
-        Route::post('/ajout', [AjoutVoitureController::class, 'ajouterVoiture']);
+        Route::post('/ajout', [AjoutVoitureController::class, 'ajouterVoiture']);                                       // ajout nouvelle
     });
 });

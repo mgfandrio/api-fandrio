@@ -6,6 +6,7 @@ use App\Http\Controllers\Chauffeur\SuppressionChauffeurController;
 use App\Http\Controllers\Chauffeur\RecuperationListeChauffeur;
 use App\Http\Controllers\Chauffeur\ConsulterDetailsChauffeur;
 use App\Http\Controllers\Chauffeur\AjoutChauffeurController;
+use App\Http\Controllers\Voiture\RecuperationListeVoiture;
 use App\Http\Controllers\Voiture\AjoutVoitureController;
 use App\Http\Controllers\Auth\AuthentificationController;
 use App\Http\Controllers\Compagnies\CompagnieController;
@@ -61,21 +62,23 @@ Route::middleware(['api.key', 'auth:api', 'role:3'])->prefix('admin')->group(fun
 Route::middleware(['api.key', 'auth:api', 'role:2'])->prefix('adminCompagnie')->group(function () {
     // Routes pour la gestion des chauffeurs
     Route::prefix('chauffeur')->group(function () {
-        Route::get('/liste', [RecuperationListeChauffeur::class, 'listeChauffeurs']);                     // liste des chauffeurs
-        Route::get('/details/{id}', [ConsulterDetailsChauffeur::class, 'detailChauffeur']);               // detail chauffeur
+        Route::get('/liste', [RecuperationListeChauffeur::class, 'listeChauffeurs']);                                   // liste des chauffeurs
+        Route::get('/details/{id}', [ConsulterDetailsChauffeur::class, 'detailChauffeur']);                             // detail chauffeur
 
-        Route::post('/ajout', [AjoutChauffeurController::class, 'ajouterChauffeur']);                       // ajout nouveau chauffeur
+        Route::post('/ajout', [AjoutChauffeurController::class, 'ajouterChauffeur']);                                   // ajout nouveau chauffeur
 
-        Route::put('/modification/{id}', [ModificationChauffeurController::class, 'modifierChauffeur']);    // modif chauffeur existant
+        Route::put('/modification/{id}', [ModificationChauffeurController::class, 'modifierChauffeur']);                // modif chauffeur existant
         Route::patch('/modification/{id}', [ModificationChauffeurController::class, 'modifierChauffeur']);
 
-        Route::put('/suppression/{id}', [SuppressionChauffeurController::class, 'supprimerChauffeur']);     // Suppression chauffeur existant
+        Route::put('/suppression/{id}', [SuppressionChauffeurController::class, 'supprimerChauffeur']);                 // Suppression chauffeur existant
 
-        Route::put('changement_etat/{id}', [ChangementEtatChauffeurController::class, 'changerEtatChauffeur']);        // Activation chauffeur
+        Route::put('changement_etat/{id}', [ChangementEtatChauffeurController::class, 'changerEtatChauffeur']);         // Activation chauffeur
     });
 
     // Routes pour la gestion des voitures
     Route::prefix('voiture')->group(function () {
+        Route::get('/liste', [RecuperationListeVoiture::class, 'listeVoitures']);                                       // liste des voitures
+
         Route::post('/ajout', [AjoutVoitureController::class, 'ajouterVoiture']);
     });
 });

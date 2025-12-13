@@ -20,9 +20,9 @@ class RechercheController extends Controller
         try {
             // Validation des critères
             $request->validate([
-                'pro_depart' => 'nullable|integer|exists:fandrio_app.provinces,pro_id',
-                'pro_arrivee' => 'nullable|integer|exists:fandrio_app.provinces,pro_id',
-                'compagnie_id' => 'nullable|integer|exists:fandrio_app.compagnies,comp_id',
+                'pro_depart' => 'nullable|integer|exists:provinces,pro_id',
+                'pro_arrivee' => 'nullable|integer|exists:provinces,pro_id',
+                'compagnie_id' => 'nullable|integer|exists:compagnies,comp_id',
                 'date_exacte' => 'nullable|date|after_or_equal:today',
                 'date_debut' => 'nullable|date|after_or_equal:today',
                 'date_fin' => 'nullable|date|after_or_equal:date_debut',
@@ -112,7 +112,7 @@ class RechercheController extends Controller
     {
         try {
             $request->validate([
-                'pro_arrivee' => 'required|integer|exists:fandrio_app.provinces,pro_id',
+                'pro_arrivee' => 'required|integer|exists:provinces,pro_id',
                 'date' => 'nullable|date|after_or_equal:today',
             ]);
 

@@ -64,7 +64,7 @@ class ChauffeurService
             Storage::disk('public')->delete($chauffeur->chauff_photo);
         }
 
-        $chauffeur->chauff_statut = 2; // Désactivation du chauffeur au lieu de la suppression
+        $chauffeur->chauff_statut = 3; // Désactivation du chauffeur au lieu de la suppression
         $chauffeur->update();
 
         return $chauffeur;

@@ -15,7 +15,7 @@ class RechercheController extends Controller
     /**
      * Recherche de voyages avec filtres
      */
-    public function recherche(Request $request): JsonResponse
+    public function rechercher(Request $request): JsonResponse
     {
         try {
             // Validation des critères

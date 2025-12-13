@@ -7,7 +7,7 @@ use App\Models\Provinces\Province;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
-class RechercherService
+class RechercheService
 {
     private const CACHE_DURATION = 300; // 5 minutes pour les résultats de recherche
     private const CACHE_KEY_PREFIX = 'recherche_voyages_';

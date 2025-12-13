@@ -13,4 +13,9 @@ class VoitureService
 
         return Voitures::create($donneesChauffeur);
     }
+
+    public function trouverUneVoiture(int $idVoiture): ?Voitures
+    {
+        return Voitures::find($idVoiture);
+    }
 }

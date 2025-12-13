@@ -10,6 +10,7 @@ use App\Http\Controllers\Provinces\ProvinceController;
 use App\Http\Controllers\Admin\UtilisateurController;
 use App\Http\Controllers\Trajet\TrajetController;
 use App\Http\Controllers\Voyage\VoyageController;
+use App\Http\Controllers\Client\RechercheController;
 use Illuminate\Support\Facades\Route;
 
 // Routes publiques (nécessitent seulement la clé API)
@@ -19,6 +20,14 @@ Route::middleware(['api.key'])->group(function () {
 
     // Inscription seulement pour les clients
     Route::post('/inscription', [AuthentificationController::class, 'inscription']);
+
+    // Routes publiques pour la recherche (accessibles sans authentification)
+    Route::prefix('recherche')->group(function () {
+        Route::get('/suggestions', [RechercheController::class, 'suggestions']);
+        Route::get('/rapide', [RechercheController::class, 'rechercheRapide']);
+        Route::post('/recherche', [RechercheController::class, 'rechercher']);
+        Route::get('/voyages/{id}', [RechercheController::class, 'details']);
+    });
 });
 
 // Routes protégées (nécessitent token JWT + clé API) / pour tous les types utilisateurs

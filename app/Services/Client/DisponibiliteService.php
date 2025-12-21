@@ -175,7 +175,6 @@ class DisponibiliteService
      */
     public function getHistoriquePlaces(int $voyageId, int $limit = 10): array
     {
-        // Implémentation fictive pour l'exemple
         return DB::table('audit_places')
             ->where('voyage_id', $voyageId)
             ->orderBy('created_at', 'desc')

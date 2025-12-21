@@ -17,6 +17,7 @@ use App\Http\Controllers\Admin\UtilisateurController;
 use App\Http\Controllers\Trajet\TrajetController;
 use App\Http\Controllers\Voyage\VoyageController;
 use App\Http\Controllers\Client\RechercheController;
+use App\Http\Controllers\Client\DisponibiliteController;
 use Illuminate\Support\Facades\Route;
 
 // Routes publiques (nécessitent seulement la clé API)
@@ -34,6 +35,14 @@ Route::middleware(['api.key'])->group(function () {
         Route::post('/recherche', [RechercheController::class, 'rechercher']);
         Route::get('/voyages/{id}', [RechercheController::class, 'details']);
     });
+
+    // Route pour la consultation des disponibilités (voyages, places)
+    Route::prefix('disponibilites')->group(function () {
+        // Consultation publique
+        Route::get('/voyages/{voyageId}', [DisponibiliteController::class, 'show']);
+        Route::post('/voyages/multiple', [DisponibiliteController::class, 'showMultiple']);
+        Route::get('/voyages/{voyageId}/sante', [DisponibiliteController::class, 'sante']);
+    });
 });
 
 // Routes protégées (nécessitent token JWT + clé API) / pour tous les types utilisateurs
@@ -42,6 +51,11 @@ Route::middleware(['api.key', 'auth:api'])->group(function () {
     Route::post('/rafraichir-token', [AuthentificationController::class, 'rafraichir']);
     Route::post('/deconnexion', [AuthentificationController::class, 'deconnexion']);
     Route::get('/moi', [AuthentificationController::class, 'moi']);
+
+    // Vérification pour réservation
+    Route::post('/voyages/{voyageId}/verifier', [DisponibiliteController::class, 'verifier']);
+    Route::post('/voyages/{voyageId}/rafraichir', [DisponibiliteController::class, 'rafraichir']);
+    Route::get('/voyages/{voyageId}/historique', [DisponibiliteController::class, 'historique']);
 
 });
 

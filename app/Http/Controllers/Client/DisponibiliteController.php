@@ -71,7 +71,7 @@ class DisponibiliteController extends Contreller
     /**
      * Vérifie la disponibilité pour un nombre spécifique de places
      */
-    public function verifier(int $voyageId, Request $request): JsonResponse
+    public function verifierNombrePlaces(int $voyageId, Request $request): JsonResponse
     {
         try {
             $request->validate([

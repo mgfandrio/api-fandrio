@@ -35,15 +35,21 @@ Route::middleware(['api.key'])->group(function () {
         Route::post('/recherche', [RechercheController::class, 'rechercher']);
         Route::get('/voyages/{id}', [RechercheController::class, 'details']);
     });
+});
 
-    // Route pour la consultation des disponibilités (voyages, places)
+
+
+// Routes publiques pour la consultation des disponibilités (voyages avec places)
+Route::middleware(['api.key', 'throttle.disponibilite:30,1'])->group(function() {
+    // Consultation publique
     Route::prefix('disponibilites')->group(function () {
-        // Consultation publique
         Route::get('/voyages/{voyageId}', [DisponibiliteController::class, 'show']);
         Route::post('/voyages/multiple', [DisponibiliteController::class, 'showMultiple']);
         Route::get('/voyages/{voyageId}/sante', [DisponibiliteController::class, 'sante']);
     });
 });
+    
+
 
 // Routes protégées (nécessitent token JWT + clé API) / pour tous les types utilisateurs
 Route::middleware(['api.key', 'auth:api'])->group(function () {
@@ -53,11 +59,12 @@ Route::middleware(['api.key', 'auth:api'])->group(function () {
     Route::get('/moi', [AuthentificationController::class, 'moi']);
 
     // Vérification pour réservation
-    Route::post('/voyages/{voyageId}/verifier', [DisponibiliteController::class, 'verifier']);
+    Route::post('/voyages/{voyageId}/verifierNbPlace', [DisponibiliteController::class, 'verifierNombrePlaces']);
     Route::post('/voyages/{voyageId}/rafraichir', [DisponibiliteController::class, 'rafraichir']);
     Route::get('/voyages/{voyageId}/historique', [DisponibiliteController::class, 'historique']);
-
 });
+
+
 
 // Routes pour l'administrateur de la plateforme
 Route::middleware(['api.key', 'auth:api', 'role:3'])->prefix('admin')->group(function () {
@@ -97,6 +104,7 @@ Route::middleware(['api.key', 'auth:api', 'role:3'])->prefix('admin')->group(fun
         Route::delete('/supprimerPlusieursProvince', [ProvinceController::class, 'destroyMultiple']);
     });
 });
+
 
 
 Route::middleware(['api.key', 'auth:api', 'role:2'])->prefix('adminCompagnie')->group(function () {

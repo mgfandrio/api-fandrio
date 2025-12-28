@@ -21,7 +21,7 @@ class RechercheVoyageDTO
 
     public static function fromRequest(array $data): self 
     {
-        return new seft(
+        return new self(
             proDepart: $data['pro_depart'] ?? null,
             proArrivee: $data['pro_arrivee'] ?? null,
             compagnieId: $data['compagnie_id'] ?? null,

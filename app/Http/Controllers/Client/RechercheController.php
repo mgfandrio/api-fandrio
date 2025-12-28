@@ -34,7 +34,7 @@ class RechercheController extends Controller
                 'per_page' => 'nullable|integer|min:1|max:100'
             ]);
 
-            $rechercheDTO = RechercheDTO::fromRequest($request->all());
+            $rechercheDTO = RechercheVoyageDTO::fromRequest($request->all());
             $rechercheDTO->validateDates();
 
             // Vérifier qu'au moins un critère est fourni

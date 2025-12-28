@@ -128,4 +128,10 @@ Route::middleware(['api.key', 'auth:api', 'role:2'])->prefix('adminCompagnie')->
         Route::put('/updateVoyage/{id}', [VoyageController::class, ' update']);
         Route::patch('/{id}/annuler', [VoyageController::class, 'annuler']);
     });
+
+    // Route pour la récupération et la gestion des provinces
+    Route::prefix('provinces')->group(function () {
+        Route::get('/recuperListeProvince', [ProvinceController::class, 'index']);
+        Route::get('/recupererProvince/{id}', [ProvinceController::class, 'show']);
+    });
 });

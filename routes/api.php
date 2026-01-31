@@ -18,6 +18,7 @@ use App\Http\Controllers\Trajet\TrajetController;
 use App\Http\Controllers\Voyage\VoyageController;
 use App\Http\Controllers\Client\RechercheController;
 use App\Http\Controllers\Client\DisponibiliteController;
+use App\Http\Controllers\Voiture\SiegeController;
 use Illuminate\Support\Facades\Route;
 
 // Routes publiques (nécessitent seulement la clé API)
@@ -62,6 +63,18 @@ Route::middleware(['api.key', 'auth:api'])->group(function () {
     Route::post('/voyages/{voyageId}/verifierNbPlace', [DisponibiliteController::class, 'verifierNombrePlaces']);
     Route::post('/voyages/{voyageId}/rafraichir', [DisponibiliteController::class, 'rafraichir']);
     Route::get('/voyages/{voyageId}/historique', [DisponibiliteController::class, 'historique']);
+
+    // Routes pour la gestion des sièges
+    Route::prefix('sieges')->groupe(function () {
+        Route::get('/voyages/{voyageId}/plan', [SiegeController::class, 'getPlanSieges']);
+        Route::post('/voyages/{voyageId}/selectionner', [SiegeController::class, 'selectionnerSiege']);
+        Route::post('/voyages/{voyageId}/liberer', [SiegeController::class, 'libererSiege']);
+        Route::post('/voyages/{voyageId}/verifier', [SiegeController::class, 'verifierSieges']);
+        Route::get('/voyages/{voyageId}/reserves', [SiegeController::class, 'getSiegesReserves']);
+        Route::get('/voyages/{voyageId}/temporaires', [SiegeController::class, 'getSiegesTemporaires']);
+        Route::get('/voyages/{voyageId}/websocket-config', [SiegeController::class, 'getWebSocketConfig']);
+    });
+
 });
 
 

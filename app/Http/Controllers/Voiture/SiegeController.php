@@ -222,8 +222,15 @@ class SiegeController extends Controller
                 throw new \Exception('Non autorisé');
             }
 
+            // Construire l'URL WebSocket Reverb
+            $scheme = env('REVERB_SCHEME', 'ws');
+            $host = env('REVERB_HOST', 'localhost');
+            $port = env('REVERB_PORT', 8080);
+            $wsUrl = $scheme . '://' . $host . ':' . $port;
+
             $config = [
-                'ws_url' => env('WEBSOCKET_URL', 'wss://ws.fandrio.mg'),
+                'ws_url' => $wsUrl,
+                'reverb_key' => env('REVERB_APP_KEY'),
                 'voyage_id' => $voyageId,
                 'utilisateur_id' => $utilisateur->util_id,
                 'token' => $this->generateWsToken($voyageId, $utilisateur->util_id),

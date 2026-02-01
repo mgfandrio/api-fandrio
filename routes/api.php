@@ -19,6 +19,7 @@ use App\Http\Controllers\Voyage\VoyageController;
 use App\Http\Controllers\Client\RechercheController;
 use App\Http\Controllers\Client\DisponibiliteController;
 use App\Http\Controllers\Voiture\SiegeController;
+use App\Http\Controllers\Voiture\PlanSiegeController;
 use Illuminate\Support\Facades\Route;
 
 // Routes publiques (nécessitent seulement la clé API)
@@ -168,5 +169,16 @@ Route::middleware(['api.key', 'auth:api', 'role:2'])->prefix('adminCompagnie')->
     Route::prefix('provinces')->group(function () {
         Route::get('/recuperListeProvince', [ProvinceController::class, 'index']);
         Route::get('/recupererProvince/{id}', [ProvinceController::class, 'show']);
+    });
+
+    // Route pour la gestion des plans de sièges
+    Route::prefix('plans-sieges')->group(function () {
+        Route::get('/', [PlanSiegeController::class, 'index']);
+        Route::post('/', [PlanSiegeController::class, 'store']);
+        Route::get('/{id}', [PlanSiegeController::class, 'show']);
+        Route::put('/{id}', [PlanSiegeController::class, 'update']);
+        Route::delete('/{id}', [PlanSiegeController::class, 'destroy']);
+        Route::get('/{id}/statistiques', [PlanSiegeController::class, 'statistiques']);
+        Route::get('/voiture/{voitureId}', [PlanSiegeController::class, 'obtenirParVoiture']);
     });
 });

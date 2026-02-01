@@ -68,5 +68,7 @@ class Kernel extends HttpKernel
         'role' => \App\Http\Middleware\VerifierRole::class,
         'jwt.auth' => \Tymon\JWTAuth\Http\Middleware\Authenticate::class,
         'jwt.refresh' => \Tymon\JWTAuth\Http\Middleware\RefreshToken::class,
+
+        'throttle.disponibilite' => \App\Http\Middleware\ThrottleDisponibilite::class,
     ];
 }

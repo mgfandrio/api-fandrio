@@ -17,6 +17,9 @@ use App\Http\Controllers\Admin\UtilisateurController;
 use App\Http\Controllers\Trajet\TrajetController;
 use App\Http\Controllers\Voyage\VoyageController;
 use App\Http\Controllers\Client\RechercheController;
+use App\Http\Controllers\Client\DisponibiliteController;
+use App\Http\Controllers\Voiture\SiegeController;
+use App\Http\Controllers\Voiture\PlanSiegeController;
 use Illuminate\Support\Facades\Route;
 
 // Routes publiques (nécessitent seulement la clé API)
@@ -36,6 +39,20 @@ Route::middleware(['api.key'])->group(function () {
     });
 });
 
+
+
+// Routes publiques pour la consultation des disponibilités (voyages avec places)
+Route::middleware(['api.key', 'throttle.disponibilite:30,1'])->group(function() {
+    // Consultation publique
+    Route::prefix('disponibilites')->group(function () {
+        Route::get('/voyages/{voyageId}', [DisponibiliteController::class, 'show']);
+        Route::post('/voyages/multiple', [DisponibiliteController::class, 'showMultiple']);
+        Route::get('/voyages/{voyageId}/sante', [DisponibiliteController::class, 'sante']);
+    });
+});
+    
+
+
 // Routes protégées (nécessitent token JWT + clé API) / pour tous les types utilisateurs
 Route::middleware(['api.key', 'auth:api'])->group(function () {
     // Routes d'authentification
@@ -43,7 +60,25 @@ Route::middleware(['api.key', 'auth:api'])->group(function () {
     Route::post('/deconnexion', [AuthentificationController::class, 'deconnexion']);
     Route::get('/moi', [AuthentificationController::class, 'moi']);
 
+    // Vérification pour réservation
+    Route::post('/voyages/{voyageId}/verifierNbPlace', [DisponibiliteController::class, 'verifierNombrePlaces']);
+    Route::post('/voyages/{voyageId}/rafraichir', [DisponibiliteController::class, 'rafraichir']);
+    Route::get('/voyages/{voyageId}/historique', [DisponibiliteController::class, 'historique']);
+
+    // Routes pour la gestion des sièges
+    Route::prefix('sieges')->groupe(function () {
+        Route::get('/voyages/{voyageId}/plan', [SiegeController::class, 'getPlanSieges']);
+        Route::post('/voyages/{voyageId}/selectionner', [SiegeController::class, 'selectionnerSiege']);
+        Route::post('/voyages/{voyageId}/liberer', [SiegeController::class, 'libererSiege']);
+        Route::post('/voyages/{voyageId}/verifier', [SiegeController::class, 'verifierSieges']);
+        Route::get('/voyages/{voyageId}/reserves', [SiegeController::class, 'getSiegesReserves']);
+        Route::get('/voyages/{voyageId}/temporaires', [SiegeController::class, 'getSiegesTemporaires']);
+        Route::get('/voyages/{voyageId}/websocket-config', [SiegeController::class, 'getWebSocketConfig']);
+    });
+
 });
+
+
 
 // Routes pour l'administrateur de la plateforme
 Route::middleware(['api.key', 'auth:api', 'role:3'])->prefix('admin')->group(function () {
@@ -83,6 +118,7 @@ Route::middleware(['api.key', 'auth:api', 'role:3'])->prefix('admin')->group(fun
         Route::delete('/supprimerPlusieursProvince', [ProvinceController::class, 'destroyMultiple']);
     });
 });
+
 
 
 Route::middleware(['api.key', 'auth:api', 'role:2'])->prefix('adminCompagnie')->group(function () {
@@ -133,5 +169,16 @@ Route::middleware(['api.key', 'auth:api', 'role:2'])->prefix('adminCompagnie')->
     Route::prefix('provinces')->group(function () {
         Route::get('/recuperListeProvince', [ProvinceController::class, 'index']);
         Route::get('/recupererProvince/{id}', [ProvinceController::class, 'show']);
+    });
+
+    // Route pour la gestion des plans de sièges
+    Route::prefix('plans-sieges')->group(function () {
+        Route::get('/', [PlanSiegeController::class, 'index']);
+        Route::post('/', [PlanSiegeController::class, 'store']);
+        Route::get('/{id}', [PlanSiegeController::class, 'show']);
+        Route::put('/{id}', [PlanSiegeController::class, 'update']);
+        Route::delete('/{id}', [PlanSiegeController::class, 'destroy']);
+        Route::get('/{id}/statistiques', [PlanSiegeController::class, 'statistiques']);
+        Route::get('/voiture/{voitureId}', [PlanSiegeController::class, 'obtenirParVoiture']);
     });
 });

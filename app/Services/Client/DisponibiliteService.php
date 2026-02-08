@@ -30,8 +30,8 @@ class DisponibiliteService
             $cacheData = Cache::get($cacheKey);
 
             // Vérifier la fraîcheur des données
-            if (time() - $cachedData['timestamp'] < 5) {
-                return $cachedData;
+            if (time() - $cacheData['timestamp'] < 5) {
+                return $cacheData;
             }
         }
 
@@ -290,9 +290,9 @@ class DisponibiliteService
      */
     private function determinerNiveauUrgence(float $tauxDisponibilite): string
     {
-        if ($tauxDisponibilite <= self::PLACES_ALERT_THRESHOLDS['CRITIQUE']) {
+        if ($tauxDisponibilite <= self::PLACES_ALERT_THRESHOLD['CRITIQUE']) {
             return 'CRITIQUE';
-        } elseif ($tauxDisponibilite <= self::PLACES_ALERT_THRESHOLDS['URGENT']) {
+        } elseif ($tauxDisponibilite <= self::PLACES_ALERT_THRESHOLD['URGENT']) {
             return 'URGENT';
         } else {
             return 'NORMAL';

@@ -7,7 +7,7 @@ use App\Services\Client\DisponibiliteService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 
-class DisponibiliteController extends Contreller
+class DisponibiliteController extends Controller
 {
     public function __construct(private DisponibiliteService $disponibiliteService){}
 
@@ -156,8 +156,9 @@ class DisponibiliteController extends Contreller
     public function sante(int $voyageId): JsonResponse
     {
         try {
-            $cacheKey = DisponibiliteService::CACHE_KEY_PREFIX . $voyageId;
-            $ageCache = $donneesCache ? time() - $donneesCache['timestamp'] : null;
+            $cacheKey = 'disponibilite_voyage_' . $voyageId;
+            $donneesCache = \Illuminate\Support\Facades\Cache::get($cacheKey);
+            $ageCache = $donneesCache ? time() - ($donneesCache['timestamp'] ?? 0) : null;
 
             $voyage = \App\Models\Voyages\Voyage::find($voyageId);
 
@@ -167,14 +168,14 @@ class DisponibiliteController extends Contreller
                 'voyage_statut' => $voyage->voyage_statut ?? null,
                 'cache_present' => !is_null($donneesCache),
                 'age_cache_secondes' => $ageCache,
-                'fraicheur' => $ageCache < 10 ? 'excellente' : ($ageCache < 30 ? 'bonne' : 'a_rafraichir'),
+                'fraicheur' => is_null($ageCache) ? 'pas_en_cache' : ($ageCache < 10 ? 'excellente' : ($ageCache < 30 ? 'bonne' : 'a_rafraichir')),
                 'places_reelles' => $voyage ? [
                     'disponibles' => $voyage->places_disponibles,
                     'reservees' => $voyage->places_reservees,
                     'libres' => $voyage->places_disponibles - $voyage->places_reservees
                 ] : null,
                 'timestamp_serveur' => time(),
-                'recommendation' => $ageCache > 30 ? 'Rafraîchir les données' : 'Données à jour'
+                'recommendation' => is_null($ageCache) ? 'Données pas en cache' : ($ageCache > 30 ? 'Rafraîchir les données' : 'Données à jour')
             ];
 
             return response()->json([

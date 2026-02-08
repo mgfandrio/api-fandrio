@@ -14,6 +14,7 @@ use App\Http\Controllers\Auth\AuthentificationController;
 use App\Http\Controllers\Compagnies\CompagnieController;
 use App\Http\Controllers\Provinces\ProvinceController;
 use App\Http\Controllers\Admin\UtilisateurController;
+use App\Http\Controllers\Voyageur\VoyageurController;
 use App\Http\Controllers\Trajet\TrajetController;
 use App\Http\Controllers\Voyage\VoyageController;
 use App\Http\Controllers\Client\RechercheController;
@@ -66,7 +67,7 @@ Route::middleware(['api.key', 'auth:api'])->group(function () {
     Route::get('/voyages/{voyageId}/historique', [DisponibiliteController::class, 'historique']);
 
     // Routes pour la gestion des sièges
-    Route::prefix('sieges')->groupe(function () {
+    Route::prefix('sieges')->group(function () {
         Route::get('/voyages/{voyageId}/plan', [SiegeController::class, 'getPlanSieges']);
         Route::post('/voyages/{voyageId}/selectionner', [SiegeController::class, 'selectionnerSiege']);
         Route::post('/voyages/{voyageId}/liberer', [SiegeController::class, 'libererSiege']);
@@ -74,6 +75,19 @@ Route::middleware(['api.key', 'auth:api'])->group(function () {
         Route::get('/voyages/{voyageId}/reserves', [SiegeController::class, 'getSiegesReserves']);
         Route::get('/voyages/{voyageId}/temporaires', [SiegeController::class, 'getSiegesTemporaires']);
         Route::get('/voyages/{voyageId}/websocket-config', [SiegeController::class, 'getWebSocketConfig']);
+    });
+
+    // Routes pour la gestion des voyageurs (CRUD)
+    Route::prefix('voyageurs')->group(function () {
+        Route::get('/', [VoyageurController::class, 'index']);                              // Liste des voyageurs de l'utilisateur
+        Route::get('/{id}', [VoyageurController::class, 'show']);                           // Détails d'un voyageur
+        Route::post('/', [VoyageurController::class, 'store']);                             // Ajouter un voyageur
+        Route::post('/multiple', [VoyageurController::class, 'storeMultiple']);             // Ajouter plusieurs voyageurs
+        Route::put('/{id}', [VoyageurController::class, 'update']);                         // Modifier un voyageur
+        Route::patch('/{id}', [VoyageurController::class, 'update']);                       // Modifier un voyageur (PATCH)
+        Route::delete('/{id}', [VoyageurController::class, 'destroy']);                     // Supprimer un voyageur
+        Route::delete('/multiple', [VoyageurController::class, 'destroyMultiple']);         // Supprimer plusieurs voyageurs
+        Route::get('/reservation/{resId}', [VoyageurController::class, 'parReservation']);  // Voyageurs d'une réservation
     });
 
 });

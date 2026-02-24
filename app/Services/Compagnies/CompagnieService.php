@@ -6,6 +6,7 @@ use App\Models\Compagnies\Compagnie;
 use App\Models\Utilisateurs\Utilisateur;
 use App\DTOs\CompagnieDTO;
 use App\DTOs\AdminCompagnieDTO;
+use App\Helpers\DateFormatter;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -311,7 +312,7 @@ class CompagnieService
             'adresse' => $compagnie->comp_adresse,
             'statut' => $compagnie->comp_statut,
             'logo' => $compagnie->comp_logo,
-            'date_creation' => $compagnie->created_at->format('Y-m-d H:i:s')
+            'date_creation' => DateFormatter::formatDateTime($compagnie->created_at)
         ];
     }
 

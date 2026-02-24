@@ -3,6 +3,7 @@
 namespace App\Services\Client;
 
 use App\Models\Voyages\Voyage;
+use App\Helpers\DateFormatter;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
@@ -223,7 +224,7 @@ class DisponibiliteService
 
         return [
             'voyage_id' => $voyage->voyage_id,
-            'voyage_date' => $voyage->voyage_date->format('Y-m-d'),
+            'voyage_date' => DateFormatter::formatDate($voyage->voyage_date),
             'heure_depart' => $voyage->voyage_heure_depart,
             'trajet_nom' => $voyage->trajet->traj_nom ?? '',
             'compagnie_nom' => $voyage->trajet->compagnie->comp_nom ?? '',

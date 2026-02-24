@@ -4,6 +4,7 @@ namespace App\Services\Province;
 
 use App\Models\Provinces\Province;
 use App\DTOs\ProvinceDTO;
+use App\Helpers\DateFormatter;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Cache;
 
@@ -324,8 +325,8 @@ class ProvinceService
             'id' => $province->pro_id,
             'nom' => $province->pro_nom,
             'orientation' => $province->pro_orientation,
-            'date_creation' => $province->created_at->format('Y-m-d H:i:s'),
-            'date_modification' => $province->updated_at->format('Y-m-d H:i:s')
+            'date_creation' => DateFormatter::formatDateTime($province->created_at),
+            'date_modification' => DateFormatter::formatDateTime($province->updated_at)
         ];
     }
 

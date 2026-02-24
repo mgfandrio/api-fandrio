@@ -3,6 +3,7 @@
 namespace App\Services\Admin;
 
 use App\Models\Utilisateurs\Utilisateur;
+use App\Helpers\DateFormatter;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Pagination\LengthAwarePaginator;
 
@@ -161,11 +162,11 @@ class UtilisateurService
             'prenom' => $utilisateur->util_prenom,
             'email' => $utilisateur->util_email,
             'telephone' => $utilisateur->util_phone,
-            'date_naissance' => $utilisateur->util_anniv?->format('Y-m-d'),
+            'date_naissance' => DateFormatter::formatDate($utilisateur->util_anniv),
             'statut' => $utilisateur->util_statut,
             'photo' => $utilisateur->util_photo,
-            'date_creation' => $utilisateur->created_at->format('Y-m-d H:i:s'),
-            'date_modification' => $utilisateur->updated_at->format('Y-m-d H:i:s')
+            'date_creation' => DateFormatter::formatDateTime($utilisateur->created_at),
+            'date_modification' => DateFormatter::formatDateTime($utilisateur->updated_at)
         ];
     }
 
@@ -209,7 +210,7 @@ class UtilisateurService
                 'numero' => $reservation->res_numero,
                 'statut' => $reservation->res_statut,
                 'montant_total' => $reservation->montant_total,
-                'date_reservation' => $reservation->res_date->format('Y-m-d H:i:s')
+                'date_reservation' => DateFormatter::formatDateTime($reservation->res_date)
             ];
         });
 

@@ -6,6 +6,9 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Tymon\JWTAuth\Contracts\JWTSubject;
+use App\Models\Voyageur\Voyageur;
+use App\Models\Reservation\Reservation;
+use App\Models\Compagnies\Compagnie;
 
 class Utilisateur extends Authenticatable implements JWTSubject
 {
@@ -34,6 +37,17 @@ class Utilisateur extends Authenticatable implements JWTSubject
     protected $hidden = [
         'util_password',
         'remember_token',
+    ];
+
+    /**
+     * Convertir les types de données pour les colonnes.
+     */
+    protected $casts = [
+        'util_anniv' => 'date',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
+        'util_statut' => 'integer',
+        'util_role' => 'integer',
     ];
 
     /**

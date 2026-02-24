@@ -6,8 +6,10 @@ use App\Models\Voyages\Voyage;
 use App\Models\Trajet\Trajet;
 use App\Models\Voitures\Voitures;
 use App\DTOs\VoyageDTO;
+use App\Helpers\DateFormatter;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
+
 
 
 class VoyageService
@@ -263,7 +265,7 @@ class VoyageService
     {
         return [
             'id' => $voyage->voyage_id,
-            'date' => $voyage->voyage_date->format('Y-m-d'),
+            'date' => DateFormatter::formatDate($voyage->voyage_date),
             'heure_depart' => $voyage->voyage_heure_depart,
             'type' => $voyage->voyage_type,
             'statut' => $voyage->voyage_statut,

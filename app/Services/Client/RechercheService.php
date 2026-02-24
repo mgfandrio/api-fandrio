@@ -4,6 +4,7 @@ namespace App\Services\Client;
 
 use App\Models\Voyages\Voyage;
 use App\Models\Provinces\Province;
+use App\Helpers\DateFormatter;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
@@ -292,7 +293,7 @@ class RechercheService
 
         return [
             'voyage_id' => $voyage->voyage_id,
-            'date' => $voyage->voyage_date->format('Y-m-d'),
+            'date' => DateFormatter::formatDate($voyage->voyage_date),
             'heure_depart' => $voyage->voyage_heure_depart,
             'type' => $voyage->voyage_type == 1 ? 'jour' : 'nuit',
             'places_disponibles' => $voyage->places_disponibles - $voyage->places_reservees,
@@ -341,7 +342,7 @@ class RechercheService
 
         // Ajouter les informations supplémentaires
         $formatted['details'] = [
-            'date_complete' => $voyage->voyage_date->format('d/m/Y'),
+            'date_complete' => DateFormatter::formatDateFR($voyage->voyage_date),
             'jour_semaine' => $voyage->voyage_date->locale('fr')->dayName,
             'heure_depart_12h' => date('h:i A', strtotime($voyage->voyage_heure_depart)),
             'peut_etre_annule' => $voyage->peutEtreAnnule(),

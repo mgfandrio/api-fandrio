@@ -57,6 +57,28 @@ class CompagnieController extends Controller
     }
 
     /**
+     * Récupère les statistiques du tableau de bord pour une compagnie spécifique
+     */
+    public function tableauBord(Request $request): JsonResponse
+    {
+        try {
+            $compagnieId = $request->user()->comp_id;
+            $statistiques = $this->compagnieService->getStatistiquesTableauBord($compagnieId);
+
+            return response()->json([
+                'statut' => true,
+                'data' => $statistiques
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'statut' => false,
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
      * Crée une nouvelle compagnie
      */
     public function store(Request $request): JsonResponse

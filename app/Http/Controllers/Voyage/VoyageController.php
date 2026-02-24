@@ -179,4 +179,25 @@ class VoyageController extends Controller
             ], 400);
         }
     }
+
+    /**
+     * Réactive un voyage annulé
+     */
+    public function reactiver(int $id): JsonResponse
+    {
+        try {
+            $voyage = $this->voyageService->reactiverVoyage($id);
+
+            return response()->json([
+                'statut' => true,
+                'message' => 'Voyage réactivé avec succès',
+                'data' => $voyage
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'statut' => false,
+                'message' => $e->getMessage()
+            ], 400);
+        }
+    }
 }

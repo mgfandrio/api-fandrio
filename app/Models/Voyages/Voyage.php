@@ -22,6 +22,7 @@ class Voyage extends Model
         'traj_id',
         'voit_id',
         'voyage_statut',
+        'voyage_is_active',
         'places_disponibles',
         'places_reservees'
     ];
@@ -29,6 +30,7 @@ class Voyage extends Model
     protected $casts = [
         'voyage_date' => 'date',
         'voyage_heure_depart' => 'string',
+        'voyage_is_active' => 'boolean',
         'places_disponibles' => 'integer',
         'places_reservees' => 'integer',
         'created_at' => 'datetime',

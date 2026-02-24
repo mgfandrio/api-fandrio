@@ -4,6 +4,9 @@ namespace App\Services\Compagnies;
 
 use App\Models\Compagnies\Compagnie;
 use App\Models\Utilisateurs\Utilisateur;
+use App\Models\Voitures\Voitures;
+use App\Models\Trajet\Trajet;
+use App\Models\Chauffeurs\Chauffeurs;
 use App\DTOs\CompagnieDTO;
 use App\DTOs\AdminCompagnieDTO;
 use App\Helpers\DateFormatter;
@@ -102,7 +105,7 @@ class CompagnieService
     }
 
     /**
-     * Récupère les statistiques des compagnies
+     * Récupère les statistiques générales des compagnies
      */
     public function getStatistiques(): array
     {
@@ -116,6 +119,80 @@ class CompagnieService
             'actives' => $actives,
             'inactives' => $inactives,
             'supprimees' => $supprimees
+        ];
+    }
+
+    /**
+     * Récupère les statistiques du tableau de bord pour une compagnie spécifique
+     */
+    public function getStatistiquesTableauBord(int $compagnieId): array
+    {
+        $compagnie = Compagnie::findOrFail($compagnieId);
+
+        // Statistiques des voitures
+        $voituresDisponibles = Voitures::where('comp_id', $compagnieId)
+            ->where('voit_statut', 1)
+            ->count();
+        
+        $voituresIndisponibles = Voitures::where('comp_id', $compagnieId)
+            ->where('voit_statut', 0)
+            ->count();
+
+        $voituresTotal = $voituresDisponibles + $voituresIndisponibles;
+
+        // Statistiques des voyages
+        $trajetsIds = Trajet::where('comp_id', $compagnieId)->pluck('traj_id');
+
+        $voyagesActifs = DB::table('fandrio_app.voyages')
+            ->whereIn('traj_id', $trajetsIds)
+            ->where('voyage_is_active', true)
+            ->where('voyage_statut', '!=', 4)
+            ->count();
+
+        $voyagesInactifs = DB::table('fandrio_app.voyages')
+            ->whereIn('traj_id', $trajetsIds)
+            ->where('voyage_is_active', false)
+            ->where('voyage_statut', '!=', 4)
+            ->count();
+
+        $voyagesAnnules = DB::table('fandrio_app.voyages')
+            ->whereIn('traj_id', $trajetsIds)
+            ->where('voyage_statut', 4)
+            ->count();
+
+        $voyagesTotal = $voyagesActifs + $voyagesInactifs + $voyagesAnnules;
+
+        // Statistiques des chauffeurs
+        // Statut: 1 = Actif, 2 = Inactif, 3 = Supprimé
+        $chauffeurs = Chauffeurs::where('comp_id', $compagnieId)
+            ->whereIn('chauff_statut', [1, 2])
+            ->count();
+
+        $chauffeurActifs = Chauffeurs::where('comp_id', $compagnieId)
+            ->where('chauff_statut', 1)
+            ->count();
+
+        $chauffeurInactifs = Chauffeurs::where('comp_id', $compagnieId)
+            ->where('chauff_statut', 2)
+            ->count();
+
+        return [
+            'voitures' => [
+                'disponibles' => $voituresDisponibles,
+                'indisponibles' => $voituresIndisponibles,
+                'total' => $voituresTotal
+            ],
+            'voyages' => [
+                'actifs' => $voyagesActifs,
+                'inactifs' => $voyagesInactifs,
+                'annules' => $voyagesAnnules,
+                'total' => $voyagesTotal
+            ],
+            'chauffeurs' => [
+                'actifs' => $chauffeurActifs,
+                'inactifs' => $chauffeurInactifs,
+                'total' => $chauffeurs
+            ]
         ];
     }
 

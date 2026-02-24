@@ -4,12 +4,14 @@ namespace App\Http\Controllers\Chauffeur;
 
 use App\Http\Controllers\Controller;
 use App\Models\Chauffeurs\Chauffeurs;
+use Illuminate\Http\Request;
 
 class RecuperationListeChauffeurController extends Controller
 {
-    public function listeChauffeurs()
+    public function listeChauffeurs(Request $request)
     {
-        $chauffeurs = Chauffeurs::all();
+        $compagnieId = $request->user()->comp_id;
+        $chauffeurs = Chauffeurs::where('comp_id', $compagnieId)->get();
 
         return response()->json(
             [

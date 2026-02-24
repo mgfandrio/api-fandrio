@@ -165,7 +165,7 @@ Route::middleware(['api.key', 'auth:api', 'role:2'])->prefix('adminCompagnie')->
         Route::get('/statistiques', [TrajetController::class, 'statistiques']);
         Route::post('/creerTrajet', [TrajetController::class, 'store']);
         Route::get('/detailTrajet/{id}', [TrajetController::class,  'show']);
-        Route::put('/updateTrajet/{id}', [TrajetController::class, ' update']);
+        Route::put('/updateTrajet/{id}', [TrajetController::class, 'update']);
         Route::patch('/{id}/statut', [TrajetController::class, 'changerStatut']);
     });
 
@@ -175,9 +175,13 @@ Route::middleware(['api.key', 'auth:api', 'role:2'])->prefix('adminCompagnie')->
         Route::get('/statistiques', [VoyageController::class, 'statistiques']);
         Route::post('/programmerVoyage', [VoyageController::class, 'store']);
         Route::get('/detailVoyage/{id}', [VoyageController::class,  'show']);
-        Route::put('/updateVoyage/{id}', [VoyageController::class, ' update']);
+        Route::put('/updateVoyage/{id}', [VoyageController::class, 'update']);
         Route::patch('/{id}/annuler', [VoyageController::class, 'annuler']);
+        Route::patch('/{id}/reactiver', [VoyageController::class, 'reactiver']);
     });
+
+    // Route pour le tableau de bord
+    Route::get('/tableau-bord', [CompagnieController::class, 'tableauBord']);
 
     // Route pour la récupération et la gestion des provinces
     Route::prefix('provinces')->group(function () {

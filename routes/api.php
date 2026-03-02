@@ -37,7 +37,11 @@ Route::middleware(['api.key'])->group(function () {
         Route::get('/rapide', [RechercheController::class, 'rechercheRapide']);
         Route::post('/recherche', [RechercheController::class, 'rechercher']);
         Route::get('/voyages/{id}', [RechercheController::class, 'details']);
+        Route::get('/a-venir', [RechercheController::class, 'upcoming']);
     });
+
+    // Provinces (public)
+    Route::get('/provinces', [ProvinceController::class, 'index']);
 });
 
 
@@ -60,6 +64,9 @@ Route::middleware(['api.key', 'auth:api'])->group(function () {
     Route::post('/rafraichir-token', [AuthentificationController::class, 'rafraichir']);
     Route::post('/deconnexion', [AuthentificationController::class, 'deconnexion']);
     Route::get('/moi', [AuthentificationController::class, 'moi']);
+
+    // Routes pour les compagnies (pour tous les types utilisateurs)
+    Route::get('/compagnies', [CompagnieController::class, 'index']);
 
     // Vérification pour réservation
     Route::post('/voyages/{voyageId}/verifierNbPlace', [DisponibiliteController::class, 'verifierNombrePlaces']);

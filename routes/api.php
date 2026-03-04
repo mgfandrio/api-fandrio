@@ -42,6 +42,9 @@ Route::middleware(['api.key'])->group(function () {
 
     // Provinces (public)
     Route::get('/provinces', [ProvinceController::class, 'index']);
+
+    // Compagnies (public - accessible sans authentification)
+    Route::get('/compagnies', [CompagnieController::class, 'index']);
 });
 
 
@@ -65,8 +68,7 @@ Route::middleware(['api.key', 'auth:api'])->group(function () {
     Route::post('/deconnexion', [AuthentificationController::class, 'deconnexion']);
     Route::get('/moi', [AuthentificationController::class, 'moi']);
 
-    // Routes pour les compagnies (pour tous les types utilisateurs)
-    Route::get('/compagnies', [CompagnieController::class, 'index']);
+    // Note: GET /compagnies est maintenant dans le groupe public (sans JWT)
 
     // Vérification pour réservation
     Route::post('/voyages/{voyageId}/verifierNbPlace', [DisponibiliteController::class, 'verifierNombrePlaces']);

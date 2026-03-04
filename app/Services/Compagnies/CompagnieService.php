@@ -69,14 +69,16 @@ class CompagnieService
      */
     public function listerCompagnies(array $filtres = []): array
     {
-        $query = Compagnie::with(['utilisateurs' => function($q) {
-            $q->where('util_role', 2); // Seulement les admins compagnie
-        }]);
+        $query = Compagnie::with([
+            'utilisateurs' => function($q) {
+                $q->where('util_role', 2); // Seulement les admins compagnie
+            },
+            'provincesDesservies'
+        ]);
 
-        // Filtrage par statut
-        if (isset($filtres['statut'])) {
-            $query->where('comp_statut', $filtres['statut']);
-        }
+        // Filtrage par statut (défaut: actif)
+        $statut = $filtres['statut'] ?? 1;
+        $query->where('comp_statut', $statut);
 
         // Filtrage par recherche
         if (isset($filtres['recherche'])) {
@@ -389,6 +391,7 @@ class CompagnieService
             'adresse' => $compagnie->comp_adresse,
             'statut' => $compagnie->comp_statut,
             'logo' => $compagnie->comp_logo,
+            'provinces' => $compagnie->provincesDesservies->pluck('pro_nom')->toArray(),
             'date_creation' => DateFormatter::formatDateTime($compagnie->created_at)
         ];
     }

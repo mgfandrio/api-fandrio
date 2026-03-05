@@ -24,7 +24,8 @@ class Compagnie extends Model
         'comp_email',
         'comp_adresse',
         'comp_logo',
-        'comp_statut'
+        'comp_statut',
+        'comp_localisation'
     ];
 
     protected $casts = [
@@ -38,6 +39,14 @@ class Compagnie extends Model
     public function utilisateurs()
     {
         return $this->hasMany(Utilisateur::class, 'comp_id', 'comp_id');
+    }
+
+    /**
+     * Relation avec la province de localisation
+     */
+    public function localisation()
+    {
+        return $this->belongsTo(Province::class, 'comp_localisation', 'pro_id');
     }
 
     /**

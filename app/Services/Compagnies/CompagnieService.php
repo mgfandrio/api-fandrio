@@ -41,6 +41,7 @@ class CompagnieService
                 'comp_phone' => $compagnieDTO->compPhone,
                 'comp_email' => $compagnieDTO->compEmail,
                 'comp_adresse' => $compagnieDTO->compAdresse,
+                'comp_localisation' => $compagnieDTO->compLocalisation,
                 'comp_statut' => 1 // Actif par défaut
             ]);
 
@@ -73,7 +74,8 @@ class CompagnieService
             'utilisateurs' => function($q) {
                 $q->where('util_role', 2); // Seulement les admins compagnie
             },
-            'provincesDesservies'
+            'provincesDesservies',
+            'localisation'
         ]);
 
         // Filtrage par statut (défaut: actif)
@@ -235,6 +237,7 @@ class CompagnieService
                 'comp_phone' => $compagnieDTO->compPhone,
                 'comp_email' => $compagnieDTO->compEmail,
                 'comp_adresse' => $compagnieDTO->compAdresse,
+                'comp_localisation' => $compagnieDTO->compLocalisation,
             ]);
 
             // Mettre à jour les provinces desservies
@@ -391,6 +394,10 @@ class CompagnieService
             'adresse' => $compagnie->comp_adresse,
             'statut' => $compagnie->comp_statut,
             'logo' => $compagnie->comp_logo,
+            'localisation' => $compagnie->localisation ? [
+                'id' => $compagnie->localisation->pro_id,
+                'nom' => $compagnie->localisation->pro_nom
+            ] : null,
             'provinces' => $compagnie->provincesDesservies->pluck('pro_nom')->toArray(),
             'date_creation' => DateFormatter::formatDateTime($compagnie->created_at)
         ];

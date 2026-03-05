@@ -97,6 +97,7 @@ class CompagnieController extends Controller
                 'provinces_desservies.*' => 'integer|exists:provinces,pro_id',
                 'modes_paiement' => 'sometimes|array',
                 'modes_paiement.*' => 'integer|exists:types_paiement,type_paie_id',
+                'comp_localisation' => 'required|integer|exists:provinces,pro_id',
                 
                 // Données admin compagnie
                 'admin_nom' => 'required|string|max:100',
@@ -167,10 +168,11 @@ class CompagnieController extends Controller
                 'comp_phone' => 'required|string|max:20',
                 'comp_email' => 'required|email|max:100',
                 'comp_adresse' => 'required|string',
+                'comp_localisation' => 'required|integer|exists:provinces,pro_id',
                 'provinces_desservies' => 'sometimes|array',
-                'provinces_desservies.*' => 'integer|exists:fandrio_app.provinces,pro_id',
+                'provinces_desservies.*' => 'integer|exists:provinces,pro_id',
                 'modes_paiement' => 'sometimes|array',
-                'modes_paiement.*' => 'integer|exists:fandrio_app.types_paiement,type_paie_id'
+                'modes_paiement.*' => 'integer|exists:types_paiement,type_paie_id'
             ]);
 
             $compagnieDTO = CompagnieDTO::fromRequest($request->all());

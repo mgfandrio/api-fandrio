@@ -44,7 +44,10 @@ Route::middleware(['api.key'])->group(function () {
     Route::get('/provinces', [ProvinceController::class, 'index']);
 
     // Compagnies (public - accessible sans authentification)
-    Route::get('/compagnies', [CompagnieController::class, 'index']);
+    Route::prefix('compagnies')->group(function () {
+        Route::get('/', [CompagnieController::class, 'index']);
+        Route::get('/{id}', [CompagnieController::class, 'show']);
+    });
 });
 
 

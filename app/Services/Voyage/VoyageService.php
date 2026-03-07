@@ -6,8 +6,10 @@ use App\Models\Voyages\Voyage;
 use App\Models\Trajet\Trajet;
 use App\Models\Voitures\Voitures;
 use App\DTOs\VoyageDTO;
+use App\Helpers\DateFormatter;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
+
 
 
 class VoyageService
@@ -215,12 +217,41 @@ class VoyageService
                 throw new \Exception('Impossible d\'annuler un voyage avec des réservations existantes');
             }
 
-            $voyage->update(['voyage_statut' => 4]); // Annulé
+            // Annuler et rendre le voyage inactif
+            $voyage->update([
+                'voyage_statut' => 4,
+                'voyage_is_active' => false
+            ]);
 
             return $this->formaterVoyageComplet($voyage);
         });
     }
 
+    /**
+     * Réactive un voyage annulé
+     */
+    public function reactiverVoyage(int $voyageId): array
+    {
+        return DB::transaction(function () use ($voyageId) {
+            $compagnieId = $this->getCompagnieUtilisateur();
+
+            $voyage = Voyage::whereHas('trajet', function($q) use ($compagnieId) {
+                $q->where('comp_id', $compagnieId);
+            })->findOrFail($voyageId);
+
+            // Vérifier que le voyage est bien annulé
+            if ($voyage->voyage_statut !== 4) {
+                throw new \Exception('Seuls les voyages annulés peuvent être réactivés');
+            }
+
+            // Réactiver le voyage
+            $voyage->update([
+                'voyage_is_active' => true
+            ]);
+
+            return $this->formaterVoyageComplet($voyage);
+        });
+    }
 
     /**
      * Récupère les statistiques des voyages
@@ -263,10 +294,11 @@ class VoyageService
     {
         return [
             'id' => $voyage->voyage_id,
-            'date' => $voyage->voyage_date->format('Y-m-d'),
+            'date' => DateFormatter::formatDate($voyage->voyage_date),
             'heure_depart' => $voyage->voyage_heure_depart,
             'type' => $voyage->voyage_type,
             'statut' => $voyage->voyage_statut,
+            'is_active' => $voyage->voyage_is_active,
             'places_disponibles' => $voyage->places_disponibles,
             'places_reservees' => $voyage->places_reservees,
             'places_libres' => $voyage->getPlacesLibres(),

@@ -4,8 +4,12 @@ namespace App\Services\Compagnies;
 
 use App\Models\Compagnies\Compagnie;
 use App\Models\Utilisateurs\Utilisateur;
+use App\Models\Voitures\Voitures;
+use App\Models\Trajet\Trajet;
+use App\Models\Chauffeurs\Chauffeurs;
 use App\DTOs\CompagnieDTO;
 use App\DTOs\AdminCompagnieDTO;
+use App\Helpers\DateFormatter;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -37,6 +41,7 @@ class CompagnieService
                 'comp_phone' => $compagnieDTO->compPhone,
                 'comp_email' => $compagnieDTO->compEmail,
                 'comp_adresse' => $compagnieDTO->compAdresse,
+                'comp_localisation' => $compagnieDTO->compLocalisation,
                 'comp_statut' => 1 // Actif par défaut
             ]);
 
@@ -65,14 +70,17 @@ class CompagnieService
      */
     public function listerCompagnies(array $filtres = []): array
     {
-        $query = Compagnie::with(['utilisateurs' => function($q) {
-            $q->where('util_role', 2); // Seulement les admins compagnie
-        }]);
+        $query = Compagnie::with([
+            'utilisateurs' => function($q) {
+                $q->where('util_role', 2); // Seulement les admins compagnie
+            },
+            'provincesDesservies',
+            'localisation'
+        ]);
 
-        // Filtrage par statut
-        if (isset($filtres['statut'])) {
-            $query->where('comp_statut', $filtres['statut']);
-        }
+        // Filtrage par statut (défaut: actif)
+        $statut = $filtres['statut'] ?? 1;
+        $query->where('comp_statut', $statut);
 
         // Filtrage par recherche
         if (isset($filtres['recherche'])) {
@@ -101,7 +109,7 @@ class CompagnieService
     }
 
     /**
-     * Récupère les statistiques des compagnies
+     * Récupère les statistiques générales des compagnies
      */
     public function getStatistiques(): array
     {
@@ -115,6 +123,80 @@ class CompagnieService
             'actives' => $actives,
             'inactives' => $inactives,
             'supprimees' => $supprimees
+        ];
+    }
+
+    /**
+     * Récupère les statistiques du tableau de bord pour une compagnie spécifique
+     */
+    public function getStatistiquesTableauBord(int $compagnieId): array
+    {
+        $compagnie = Compagnie::findOrFail($compagnieId);
+
+        // Statistiques des voitures
+        $voituresDisponibles = Voitures::where('comp_id', $compagnieId)
+            ->where('voit_statut', 1)
+            ->count();
+        
+        $voituresIndisponibles = Voitures::where('comp_id', $compagnieId)
+            ->where('voit_statut', 0)
+            ->count();
+
+        $voituresTotal = $voituresDisponibles + $voituresIndisponibles;
+
+        // Statistiques des voyages
+        $trajetsIds = Trajet::where('comp_id', $compagnieId)->pluck('traj_id');
+
+        $voyagesActifs = DB::table('fandrio_app.voyages')
+            ->whereIn('traj_id', $trajetsIds)
+            ->where('voyage_is_active', true)
+            ->where('voyage_statut', '!=', 4)
+            ->count();
+
+        $voyagesInactifs = DB::table('fandrio_app.voyages')
+            ->whereIn('traj_id', $trajetsIds)
+            ->where('voyage_is_active', false)
+            ->where('voyage_statut', '!=', 4)
+            ->count();
+
+        $voyagesAnnules = DB::table('fandrio_app.voyages')
+            ->whereIn('traj_id', $trajetsIds)
+            ->where('voyage_statut', 4)
+            ->count();
+
+        $voyagesTotal = $voyagesActifs + $voyagesInactifs + $voyagesAnnules;
+
+        // Statistiques des chauffeurs
+        // Statut: 1 = Actif, 2 = Inactif, 3 = Supprimé
+        $chauffeurs = Chauffeurs::where('comp_id', $compagnieId)
+            ->whereIn('chauff_statut', [1, 2])
+            ->count();
+
+        $chauffeurActifs = Chauffeurs::where('comp_id', $compagnieId)
+            ->where('chauff_statut', 1)
+            ->count();
+
+        $chauffeurInactifs = Chauffeurs::where('comp_id', $compagnieId)
+            ->where('chauff_statut', 2)
+            ->count();
+
+        return [
+            'voitures' => [
+                'disponibles' => $voituresDisponibles,
+                'indisponibles' => $voituresIndisponibles,
+                'total' => $voituresTotal
+            ],
+            'voyages' => [
+                'actifs' => $voyagesActifs,
+                'inactifs' => $voyagesInactifs,
+                'annules' => $voyagesAnnules,
+                'total' => $voyagesTotal
+            ],
+            'chauffeurs' => [
+                'actifs' => $chauffeurActifs,
+                'inactifs' => $chauffeurInactifs,
+                'total' => $chauffeurs
+            ]
         ];
     }
 
@@ -155,6 +237,7 @@ class CompagnieService
                 'comp_phone' => $compagnieDTO->compPhone,
                 'comp_email' => $compagnieDTO->compEmail,
                 'comp_adresse' => $compagnieDTO->compAdresse,
+                'comp_localisation' => $compagnieDTO->compLocalisation,
             ]);
 
             // Mettre à jour les provinces desservies
@@ -311,7 +394,12 @@ class CompagnieService
             'adresse' => $compagnie->comp_adresse,
             'statut' => $compagnie->comp_statut,
             'logo' => $compagnie->comp_logo,
-            'date_creation' => $compagnie->created_at->format('Y-m-d H:i:s')
+            'localisation' => $compagnie->localisation ? [
+                'id' => $compagnie->localisation->pro_id,
+                'nom' => $compagnie->localisation->pro_nom
+            ] : null,
+            'provinces' => $compagnie->provincesDesservies->pluck('pro_nom')->toArray(),
+            'date_creation' => DateFormatter::formatDateTime($compagnie->created_at)
         ];
     }
 

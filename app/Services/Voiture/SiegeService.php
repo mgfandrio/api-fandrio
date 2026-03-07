@@ -5,6 +5,7 @@ namespace App\Services\Voiture;
 use App\Models\Voitures\SiegeReserve;
 use App\Models\Voyages\Voyage;
 use App\Models\Voitures\PlanSiege;
+use App\Helpers\DateFormatter;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Redis;
@@ -86,7 +87,7 @@ class SiegeService
                 'success' => true,
                 'siege' => $siegeNumero,
                 'utilisateur_id' => $utilisateurId,
-                'expire_lock' => $siege->expire_lock->format('Y-m-d H:i:s'),
+                'expire_lock' => DateFormatter::formatDateTime($siege->expire_lock),
                 'message' => 'Siège temporairement réservé'
             ];
         });
@@ -145,7 +146,7 @@ class SiegeService
                 'statut' => $siege ? $siege->siege_statut : 2,
                 'utilisateur_id' => $siege ? $siege->utilisateur_id : null,
                 'expire_lock' => $siege && $siege->expire_lock ? 
-                    $siege->expire_lock->format('Y-m-d H:i:s') : null
+                    DateFormatter::formatDateTime($siege->expire_lock) : null
             ];
         }
         return $resultats;
@@ -177,7 +178,7 @@ class SiegeService
                 return [
                     'siege' => $siege->siege_numero,
                     'utilisateur_id' => $siege->utilisateur_id,
-                    'expire_lock' => $siege->expire_lock->format('Y-m-d H:i:s')
+                    'expire_lock' => DateFormatter::formatDateTime($siege->expire_lock)
                 ];
             })
             ->toArray();
@@ -298,7 +299,7 @@ class SiegeService
             'disponible' => !$siege || $siege->estDisponible(),
             'utilisateur_id' => $siege ? $siege->utilisateur_id : null,
             'expire_lock' => $siege && $siege->expire_lock ? 
-                $siege->expire_lock->format('Y-m-d H:i:s') : null
+                DateFormatter::formatDateTime($siege->expire_lock) : null
         ];
     }
 

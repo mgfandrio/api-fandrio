@@ -37,6 +37,16 @@ Route::middleware(['api.key'])->group(function () {
         Route::get('/rapide', [RechercheController::class, 'rechercheRapide']);
         Route::post('/recherche', [RechercheController::class, 'rechercher']);
         Route::get('/voyages/{id}', [RechercheController::class, 'details']);
+        Route::get('/a-venir', [RechercheController::class, 'upcoming']);
+    });
+
+    // Provinces (public)
+    Route::get('/provinces', [ProvinceController::class, 'index']);
+
+    // Compagnies (public - accessible sans authentification)
+    Route::prefix('compagnies')->group(function () {
+        Route::get('/', [CompagnieController::class, 'index']);
+        Route::get('/{id}', [CompagnieController::class, 'show']);
     });
 });
 
@@ -60,6 +70,8 @@ Route::middleware(['api.key', 'auth:api'])->group(function () {
     Route::post('/rafraichir-token', [AuthentificationController::class, 'rafraichir']);
     Route::post('/deconnexion', [AuthentificationController::class, 'deconnexion']);
     Route::get('/moi', [AuthentificationController::class, 'moi']);
+
+    // Note: GET /compagnies est maintenant dans le groupe public (sans JWT)
 
     // Vérification pour réservation
     Route::post('/voyages/{voyageId}/verifierNbPlace', [DisponibiliteController::class, 'verifierNombrePlaces']);
@@ -165,7 +177,7 @@ Route::middleware(['api.key', 'auth:api', 'role:2'])->prefix('adminCompagnie')->
         Route::get('/statistiques', [TrajetController::class, 'statistiques']);
         Route::post('/creerTrajet', [TrajetController::class, 'store']);
         Route::get('/detailTrajet/{id}', [TrajetController::class,  'show']);
-        Route::put('/updateTrajet/{id}', [TrajetController::class, ' update']);
+        Route::put('/updateTrajet/{id}', [TrajetController::class, 'update']);
         Route::patch('/{id}/statut', [TrajetController::class, 'changerStatut']);
     });
 
@@ -175,9 +187,13 @@ Route::middleware(['api.key', 'auth:api', 'role:2'])->prefix('adminCompagnie')->
         Route::get('/statistiques', [VoyageController::class, 'statistiques']);
         Route::post('/programmerVoyage', [VoyageController::class, 'store']);
         Route::get('/detailVoyage/{id}', [VoyageController::class,  'show']);
-        Route::put('/updateVoyage/{id}', [VoyageController::class, ' update']);
+        Route::put('/updateVoyage/{id}', [VoyageController::class, 'update']);
         Route::patch('/{id}/annuler', [VoyageController::class, 'annuler']);
+        Route::patch('/{id}/reactiver', [VoyageController::class, 'reactiver']);
     });
+
+    // Route pour le tableau de bord
+    Route::get('/tableau-bord', [CompagnieController::class, 'tableauBord']);
 
     // Route pour la récupération et la gestion des provinces
     Route::prefix('provinces')->group(function () {

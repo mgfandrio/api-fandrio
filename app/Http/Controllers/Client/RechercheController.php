@@ -138,4 +138,24 @@ class RechercheController extends Controller
             ], 400);
         }
     }
+
+    /**
+     * Récupère les voyages à venir (pour la page d'accueil)
+     */
+    public function upcoming(): JsonResponse
+    {
+        try {
+            $resultat = $this->rechercheService->rechercherVoyages(['per_page' => 10]);
+
+            return response()->json([
+                'statut' => true,
+                'data' => $resultat
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'statut' => false,
+                'message' => 'Erreur lors de la récupération des voyages à venir'
+            ], 500);
+        }
+    }
 }

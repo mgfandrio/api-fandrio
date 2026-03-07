@@ -5,6 +5,7 @@ namespace App\Services\Trajet;
 use App\Models\Trajet\Trajet;
 use App\Models\Compagnies\Compagnie;
 use App\DTOs\TrajetDTO;
+use App\Helpers\DateFormatter;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 
@@ -240,7 +241,7 @@ class TrajetService
             'duree' => $trajet->traj_duree,
             'duree_formatee' => $trajet->getDureeFormatee(),
             'statut' => $trajet->traj_statut,
-            'date_creation' => $trajet->created_at->format('Y-m-d H:i:s')
+            'date_creation' => DateFormatter::formatDateTime($trajet->created_at)
         ];
     }
 

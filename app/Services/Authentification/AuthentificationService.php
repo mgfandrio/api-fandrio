@@ -162,6 +162,15 @@ class AuthentificationService
      */
     private function formaterUtilisateur(Utilisateur $utilisateur): array
     {
+        $compInfo = null;
+        if ($utilisateur->comp_id && $utilisateur->compagnie) {
+            $compInfo = [
+                'id' => $utilisateur->compagnie->comp_id,
+                'nom' => $utilisateur->compagnie->comp_nom,
+                'localisation' => $utilisateur->compagnie->localisation ? $utilisateur->compagnie->localisation->pro_nom : null
+            ];
+        }
+
         return [
             'id' => $utilisateur->util_id,
             'nom' => $utilisateur->util_nom,
@@ -170,6 +179,7 @@ class AuthentificationService
             'telephone' => $utilisateur->util_phone,
             'role' => $utilisateur->util_role,
             'compagnie_id' => $utilisateur->comp_id,
+            'compagnie' => $compInfo,
             'statut' => $utilisateur->util_statut
         ];
     }

@@ -31,6 +31,19 @@ class Reservation extends Model
     ];
 
     /**
+     * Convertir les types de données pour les colonnes.
+     */
+    protected $casts = [
+        'res_date' => 'datetime',
+        'date_limite_paiement' => 'datetime',
+        'date_annulation_possible' => 'datetime',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
+        'res_statut' => 'integer',
+        'nb_voyageurs' => 'integer',
+    ];
+
+    /**
      * Relation avec l'utilisateur
      */
     public function utilisateur()

@@ -21,7 +21,7 @@ class Trajet extends Model
         'pro_arrivee',
         'traj_tarif',
         'traj_km',
-        'tra_duree',
+        'traj_duree',
         'comp_id',
         'traj_statut'
     ];

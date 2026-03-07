@@ -5,6 +5,7 @@ namespace App\Services\Voiture;
 use App\DTOs\PlanSiegeDTO;
 use App\Models\Voitures\PlanSiege;
 use App\Models\Voitures\Voitures;
+use App\Helpers\DateFormatter;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
@@ -235,8 +236,8 @@ class PlanSiegeService
             'config_sieges' => $plan->config_sieges,
             'nombre_total_sieges' => $plan->getNombreTotalSieges(),
             'statut' => $plan->plan_statut,
-            'date_creation' => $plan->created_at->format('Y-m-d H:i:s'),
-            'date_modification' => $plan->updated_at->format('Y-m-d H:i:s')
+            'date_creation' => DateFormatter::formatDateTime($plan->created_at),
+            'date_modification' => DateFormatter::formatDateTime($plan->updated_at)
         ];
     }
 

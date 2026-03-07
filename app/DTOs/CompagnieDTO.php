@@ -12,6 +12,7 @@ class CompagnieDTO
         public string $compPhone,
         public string $compEmail,
         public string $compAdresse,
+        public ?int $compLocalisation = null,
         public array $provincesDesservies = [],
         public array $modesPaiement = []
     ) {}
@@ -26,6 +27,7 @@ class CompagnieDTO
             compPhone: $data['comp_phone'],
             compEmail: $data['comp_email'],
             compAdresse: $data['comp_adresse'],
+            compLocalisation: $data['comp_localisation'] ?? null,
             provincesDesservies: $data['provinces_desservies'] ?? [],
             modesPaiement: $data['modes_paiement'] ?? []
         );

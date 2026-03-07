@@ -57,6 +57,28 @@ class CompagnieController extends Controller
     }
 
     /**
+     * Récupère les statistiques du tableau de bord pour une compagnie spécifique
+     */
+    public function tableauBord(Request $request): JsonResponse
+    {
+        try {
+            $compagnieId = $request->user()->comp_id;
+            $statistiques = $this->compagnieService->getStatistiquesTableauBord($compagnieId);
+
+            return response()->json([
+                'statut' => true,
+                'data' => $statistiques
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'statut' => false,
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
      * Crée une nouvelle compagnie
      */
     public function store(Request $request): JsonResponse
@@ -75,6 +97,7 @@ class CompagnieController extends Controller
                 'provinces_desservies.*' => 'integer|exists:provinces,pro_id',
                 'modes_paiement' => 'sometimes|array',
                 'modes_paiement.*' => 'integer|exists:types_paiement,type_paie_id',
+                'comp_localisation' => 'required|integer|exists:provinces,pro_id',
                 
                 // Données admin compagnie
                 'admin_nom' => 'required|string|max:100',
@@ -145,10 +168,11 @@ class CompagnieController extends Controller
                 'comp_phone' => 'required|string|max:20',
                 'comp_email' => 'required|email|max:100',
                 'comp_adresse' => 'required|string',
+                'comp_localisation' => 'required|integer|exists:provinces,pro_id',
                 'provinces_desservies' => 'sometimes|array',
-                'provinces_desservies.*' => 'integer|exists:fandrio_app.provinces,pro_id',
+                'provinces_desservies.*' => 'integer|exists:provinces,pro_id',
                 'modes_paiement' => 'sometimes|array',
-                'modes_paiement.*' => 'integer|exists:fandrio_app.types_paiement,type_paie_id'
+                'modes_paiement.*' => 'integer|exists:types_paiement,type_paie_id'
             ]);
 
             $compagnieDTO = CompagnieDTO::fromRequest($request->all());

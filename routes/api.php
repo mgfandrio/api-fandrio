@@ -102,6 +102,10 @@ Route::middleware(['api.key', 'auth:api'])->group(function () {
         Route::get('/reservation/{resId}', [VoyageurController::class, 'parReservation']);  // Voyageurs d'une réservation
     });
 
+    // Tableau de bord client (Statistiques et Historique)
+    Route::prefix('client/reservation')->group(function () {
+        Route::get('/dashboard', [\App\Http\Controllers\Client\ReservationController::class, 'dashboard']);
+    });
 });
 
 

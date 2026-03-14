@@ -45,10 +45,12 @@ class PlanSiegeDTO
         return [
             'plan_nom' => 'required|string|max:100',
             'config_sieges' => 'required|array',
-            'config_sieges.rangees' => 'required|array|min:1',
-            'config_sieges.rangees.*.lettre' => 'required|string|size:1|regex:/^[A-Z]$/',
-            'config_sieges.rangees.*.sieges' => 'required|array|min:1',
-            'config_sieges.rangees.*.sieges.*' => 'required|string|in:normal,couloir,fenetre,handicape',
+            'config_sieges.sieges' => 'nullable|array|min:1',
+            'config_sieges.sieges.*' => 'integer',
+            'config_sieges.rangees' => 'nullable|array|min:1',
+            'config_sieges.rangees.*.lettre' => 'required_with:config_sieges.rangees|string|size:1|regex:/^[A-Z]$/',
+            'config_sieges.rangees.*.sieges' => 'required_with:config_sieges.rangees|array|min:1',
+            'config_sieges.rangees.*.sieges.*' => 'required_with:config_sieges.rangees|string|in:normal,couloir,fenetre,handicape',
             'plan_statut' => 'required|integer|in:1,2',
             'voit_id' => 'required|integer|exists:fandrio_app.voitures,voit_id'
         ];

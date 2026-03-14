@@ -36,7 +36,7 @@ COMMENT ON TABLE fandrio_app.audit_places IS 'Table d''audit pour tracer les mod
 -- =============================================================================
 -- 19. TABLE PLAN_SIEGES (Configuration des plans de sièges)
 -- =============================================================================
-CREATE TABLE fandrio_app.plans_sieges (
+CREATE TABLE fandrio_app.plan_sieges (
     plan_id SERIAL PRIMARY KEY,
     voit_id INTEGER NOT NULL REFERENCES fandrio_app.voitures(voit_id),
     config_sieges JSONB NOT NULL, -- Configuration des sièges

@@ -165,14 +165,14 @@ class VoyageService
             $voyageDTO->validate();
 
             // Vérifier que le nouveau trajet appartient à la compagnie
-            if ($voyageDTO->tarjId != $voyage->traj_id) {
+            if ($voyageDTO->trajId != $voyage->traj_id) {
                 $trajet = Trajet::where('comp_id', $compagnieId)
                     ->findOrFail($voyageDTO->trajId);
             }
 
             // Vérifier que la nouvelle voiture appartient à la compagnie
             if ($voyageDTO->voitId != $voyage->voit_id) {
-                $voiture = Voiture::where('comp_id', $compagnieId)
+                $voiture = Voitures::where('comp_id', $compagnieId)
                     ->where('voit_statut', 1)
                     ->findOrFail($voyageDTO->voitId);
 
@@ -196,6 +196,7 @@ class VoyageService
                 'places_disponibles' => $voyageDTO->placesDisponibles
             ]);
 
+            return $this->formaterVoyageComplet($voyage);
         });
     }
 

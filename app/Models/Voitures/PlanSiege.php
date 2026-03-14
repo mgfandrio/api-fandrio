@@ -44,15 +44,30 @@ class PlanSiege extends Model
         $config = $this->config_sieges ?? [];
         $sieges = [];
 
+        // Nouveau format simplifié : {"sieges": [1, 2, 3, ...]}
+        if (isset($config['sieges']) && is_array($config['sieges'])) {
+            foreach ($config['sieges'] as $numero) {
+                $sieges[] = [
+                    'code' => (string) $numero,
+                    'rangee' => null,
+                    'numero' => $numero,
+                    'type' => 'normal',
+                    'statut' => 'libre'
+                ];
+            }
+            return $sieges;
+        }
+
+        // Ancien format avec rangées
         foreach ($config['rangees'] ?? [] as $rangee) {
-            $lettreRangee = $rangee['lettre'];
+            $lettreRangee = $rangee['lettre'] ?? null;
             foreach ($rangee['sieges'] as $numero => $type) {
                 $sieges[] = [
-                    'code' => $lettreRangee . $numero,
+                    'code' => (string) $numero,
                     'rangee' => $lettreRangee,
                     'numero' => $numero,
-                    'type' => $type,// ''normal', 'couloir', 'fenetre'
-                    'statut' => 'libre' // Par défaut
+                    'type' => $type,
+                    'statut' => 'libre'
                 ];
             }
         }
@@ -66,10 +81,14 @@ class PlanSiege extends Model
     public function getNombreTotalSieges(): int
     {
         $config = $this->config_sieges ?? [];
-        $total = 0;
+        
+        if (isset($config['sieges']) && is_array($config['sieges'])) {
+            return count($config['sieges']);
+        }
 
+        $total = 0;
         foreach ($config['rangees'] ?? [] as $rangee) {
-            $total += count($rangee['sieges']);
+            $total += count($rangee['sieges'] ?? []);
         }
 
         return $total;

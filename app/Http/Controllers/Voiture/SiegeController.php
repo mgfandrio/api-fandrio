@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Services\Voiture\SiegeService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Facades\Auth;
 
 class SiegeController extends Controller 
 {
@@ -43,19 +42,14 @@ class SiegeController extends Controller
         try {
             $request->validate([
                 'siege_numero' => 'required|string|max:10',
-                'utilisateur_id' => 'required|integer|exists:utilisateurs,util_id'
             ]);
 
-            // Vérifier que l'utilisateur est authentifié et correspond à l'ID fourni
-            $utilisateur = Auth::user();
-            if (!$utilisateur || $utilisateur->util_id != $request->utilisateur_id) {
-                throw new \Exception('Non autorisé');
-            }
-
+            $utilisateur = $request->user();
+            
             $resultat = $this->siegeService->selectionnerSiege(
                 $voyageId,
                 $request->siege_numero,
-                $request->utilisateur_id
+                $utilisateur->util_id
             );
 
             return response()->json([
@@ -86,19 +80,14 @@ class SiegeController extends Controller
         try {
             $request->validate([
                 'siege_numero' => 'required|string|max:10',
-                'utilisateur_id' => 'required|integer|exists:utilisateurs,util_id'
             ]);
 
-            // Vérifie que l'utilisateur est authentifié 
-            $utilisateur = Auth::user();
-            if (!$utilisateur || $utilisateur->util_id != $request->utilisateur_id) {
-                throw new \Exception('Non autorisé');
-            }
+            $utilisateur = $request->user();
 
             $resultat = $this->siegeService->libererSiege(
                 $voyageId,
                 $request->siege_numero,
-                $request->utilisateur_id
+                $utilisateur->util_id
             );
 
             return response()->json([
@@ -110,8 +99,7 @@ class SiegeController extends Controller
         } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([
                 'statut' => false,
-                'message' => 'Données de requête invalides',
-                'erreurs' => $e->errors()
+                'message' => 'Données de requête invalides'
             ], 422);
         } catch (\Exception $e) {
             return response()->json([
@@ -213,11 +201,11 @@ class SiegeController extends Controller
     /**
      * Récupère l'URL de connexion WebSocket
      */
-    public function getWebSocketConfig(int $voyageId): JsonResponse
+    public function getWebSocketConfig(Request $request, int $voyageId): JsonResponse
     {
         try {
             // Vérifier que l'utilisateur est authentifié
-            $utilisateur = Auth::user();
+            $utilisateur = $request->user();
             if (!$utilisateur) {
                 throw new \Exception('Non autorisé');
             }

@@ -45,6 +45,36 @@ class PlanSiegeService
     }
 
     /**
+     * Génère automatiquement un plan de sièges pour une voiture
+     */
+    public function genererPlanAutomatique(int $voitureId, int $nombrePlaces): array
+    {
+        return DB::transaction(function () use ($voitureId, $nombrePlaces) {
+            $sieges = [];
+            for ($i = 1; $i <= $nombrePlaces; $i++) {
+                $sieges[] = $i;
+            }
+
+            $config = [
+                'sieges' => $sieges
+            ];
+
+            $plan = PlanSiege::updateOrCreate(
+                ['voit_id' => $voitureId],
+                [
+                    'plan_nom' => 'Plan Automatique',
+                    'config_sieges' => $config,
+                    'plan_statut' => 1
+                ]
+            );
+
+            $this->invaliderCacheVoiture($voitureId);
+
+            return $this->formaterPlan($plan);
+        });
+    }
+
+    /**
      * Met à jour un plan de sièges existant
      */
     public function mettreAJourPlan(int $planId, PlanSiegeDTO $planSiegeDTO): array
@@ -127,7 +157,7 @@ class PlanSiegeService
         $plans = $query->with('voiture')->paginate($filtres['per_page'] ?? 15);
 
         return [
-            'plans' => $plans->map(function ($plan) {
+            'plans' => $plans->getCollection()->map(function ($plan) {
                 return $this->formaterPlan($plan);
             }),
             'pagination' => [
@@ -230,8 +260,8 @@ class PlanSiegeService
             'voiture' => [
                 'id' => $plan->voiture->voit_id,
                 'matricule' => $plan->voiture->voit_matricule,
-                'marque' => $plan->voiture->voit_marque,
-                'modele' => $plan->voiture->voit_modele
+                'marque' => $plan->voiture->voit_marque ?? 'Inconnue',
+                'modele' => $plan->voiture->voit_modele ?? 'Inconnu'
             ],
             'config_sieges' => $plan->config_sieges,
             'nombre_total_sieges' => $plan->getNombreTotalSieges(),

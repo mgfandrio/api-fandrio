@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use App\Models\Compagnies\Compagnie;
 use App\Models\Chauffeurs\Chauffeurs;
 use App\Models\Voyages\Voyage;
+use App\Models\Voitures\PlanSiege;
 
 
 class Voitures extends Model
@@ -50,6 +51,13 @@ class Voitures extends Model
      */
     public function voyages() {
         return $this->hasMany(Voyage::class, 'voit_id', 'voit_id');
+    }
+
+    /**
+     * Relation avec le plan de sièges
+     */
+    public function planSiege() {
+        return $this->hasOne(PlanSiege::class, 'voit_id', 'voit_id');
     }
 
     /**

@@ -7,9 +7,8 @@ use App\Services\Voiture\VoitureService;
 
 class ConsulterDetailsVoitureController extends Controller
 {
-    public function detailVoiture(int $idVoiture)
+    public function detailVoiture(int $idVoiture, VoitureService $voitureService)
     {
-        $voitureService = new VoitureService();
         $voiture = $voitureService->trouverUneVoiture($idVoiture);
 
         if (!$voiture) {

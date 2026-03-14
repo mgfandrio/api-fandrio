@@ -105,6 +105,9 @@ Route::middleware(['api.key', 'auth:api'])->group(function () {
     // Tableau de bord client (Statistiques et Historique)
     Route::prefix('client/reservation')->group(function () {
         Route::get('/dashboard', [\App\Http\Controllers\Client\ReservationController::class, 'dashboard']);
+        Route::post('/', [\App\Http\Controllers\Client\ReservationController::class, 'store']);
+        Route::post('/{id}/confirm', [\App\Http\Controllers\Client\ReservationController::class, 'confirm']);
+        Route::get('/{id}/invoice', [\App\Http\Controllers\Client\ReservationController::class, 'getInvoice']);
     });
 });
 
@@ -173,6 +176,7 @@ Route::middleware(['api.key', 'auth:api', 'role:2'])->prefix('adminCompagnie')->
         Route::get('/details/{id}', [ConsulterDetailsVoitureController::class, 'detailVoiture']);                       // details voiture
 
         Route::post('/ajout', [AjoutVoitureController::class, 'ajouterVoiture']);                                       // ajout nouvelle
+        Route::put('/modification/{id}', [ModificationVoitureController::class, 'modifierVoiture']);                    // modification voiture
     });
 
     // Route pour la gestion des trajets

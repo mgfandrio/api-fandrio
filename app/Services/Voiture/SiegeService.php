@@ -6,9 +6,9 @@ use App\Models\Voitures\SiegeReserve;
 use App\Models\Voyages\Voyage;
 use App\Models\Voitures\PlanSiege;
 use App\Helpers\DateFormatter;
+use App\Events\SiegeUpdated;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Redis;
 
 class SiegeService
 {
@@ -29,7 +29,7 @@ class SiegeService
             return Cache::get($cacheKey);
         }
 
-        $voyage = Voyage::with('voiture.planSieges')->findOrFail($voyageId);
+        $voyage = Voyage::with('voiture.planSiege')->findOrFail($voyageId);
         $planSiege = $voyage->voiture->planSiege;
 
         if (!$planSiege) {
@@ -73,7 +73,7 @@ class SiegeService
             }
 
             // Verrouiller temporairement
-            if (!$siege->verrouillerTemporairement($utilisateurId, self::LOCK_DUARATION)) {
+            if (!$siege->verrouillerTemporairement($utilisateurId, self::LOCK_DURATION)) {
                 throw new \Exception('Impossible de verrouiller ce siège');
             }
 
@@ -225,7 +225,7 @@ class SiegeService
         }
 
         // Appliquer les statuts
-        foreach ($siegesConfig as $siege) {
+        foreach ($siegesConfig as &$siege) {
             $numero = $siege['code'];
 
             if (in_array($numero, $siegesReserves)) {
@@ -253,7 +253,8 @@ class SiegeService
                 'id' => $planSiege->voit_id,
                 'matricule' => $planSiege->voiture->voit_matricule ?? '',
                 'marque' => $planSiege->voiture->voit_marque ?? '',
-                'modele' => $planSiege->voiture->voit_modele ?? ''
+                'modele' => $planSiege->voiture->voit_modele ?? '',
+                'chauffeur' => $planSiege->voiture->chauffeur ? ($planSiege->voiture->chauffeur->chauff_nom . ' ' . $planSiege->voiture->chauffeur->chauff_prenom) : 'N/A'
             ],
             'plan' => $siegesConfig,
             'total_sieges' => count($siegesConfig),
@@ -270,17 +271,15 @@ class SiegeService
      */
     private function publierMiseAJour(int $voyageId, string $siegeNumero, string $action, ?int $utilisateurId = null): void 
     {
-        $channel = self::REDIS_CHANNEL_PREFIX . $voyageId;
+        $data = $this->getStatutSiege($voyageId, $siegeNumero);
 
-        $message = [
-            'action' => $action, 
-            'voyage_id' => $voyageId,
-            'utilisateur_id' => $utilisateurId,
-            'timestamp' => time(),
-            'data'  => $this->getStatutSiege($voyageId, $siegeNumero)
-        ];
-
-        Redis::publish($channel, json_encode($message));
+        broadcast(new SiegeUpdated(
+            $voyageId,
+            $siegeNumero,
+            $action,
+            $utilisateurId,
+            $data
+        ))->toOthers();
     }
 
 

@@ -76,7 +76,7 @@ class Compagnie extends Model
             'fandrio_app.compagnie_paiements',
             'comp_id',
             'type_paie_id'
-        )->withPivot('comp_paie_statut')
+        )->withPivot('comp_paie_statut', 'comp_paie_numero', 'comp_paie_titulaire')
          ->wherePivot('comp_paie_statut', 1);
     }
 

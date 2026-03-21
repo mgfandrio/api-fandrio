@@ -375,7 +375,7 @@ class CompagnieService
                 break;
             case 2: // MVola (Telma)
                 $operateur = "MVola";
-                $prefixesAutorises = ['034', '037'];
+                $prefixesAutorises = ['034', '038'];
                 break;
             case 3: // Airtel Money
                 $operateur = "Airtel Money";

@@ -41,7 +41,7 @@ class DisponibiliteController extends Controller
         try {
             $request->validate([
                 'voyage_ids' => 'required|array|min:1|max:20',
-                'voyage_ids.*' => 'integer|exists:fandrio_app.voyages,voyage_id'
+                'voyage_ids.*' => 'integer|exists:voyages,voyage_id'
             ]);
 
             $disponibilites = $this->disponibiliteService->getDisponibilitesMultiple(

@@ -13,7 +13,7 @@ class SiegeReserve extends Model
     use HasFactory;
 
     protected $table = 'fandrio_app.sieges_reserves';
-    protected $primaryKey = 'sieges_id';
+    protected $primaryKey = 'siege_id';
 
     protected $fillable = [
         'voyage_id',

@@ -15,8 +15,45 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use SimpleSoftwareIO\QrCode\Facades\QrCode;
 
+use Illuminate\Support\Facades\Log;
+
 class ReservationController extends Controller
 {
+    /**
+     * Libère les réservations qui ont dépassé le délai de paiement
+     * Cette méthode peut être appelée via un cron ou à la volée avant de charger des données.
+     */
+    public static function libererReservationsExpirees(): int 
+    {
+        return DB::transaction(function() {
+            // 1. Trouver les réservations confirmées mais non payées dont le délai a expiré
+            $expirees = Reservation::where('res_statut', 1)
+                ->where('date_limite_paiement', '<', now())
+                ->get();
+            
+            $count = $expirees->count();
+
+            foreach ($expirees as $res) {
+                // Marquer la réservation comme annulée
+                $res->update(['res_statut' => 4]);
+
+                // Libérer les sièges associés
+                SiegeReserve::where('res_id', $res->res_id)->update([
+                    'siege_statut' => 2,
+                    'utilisateur_id' => null,
+                    'res_id' => null,
+                    'expire_lock' => null
+                ]);
+            }
+
+            if ($count > 0) {
+                Log::info("Nettoyage: $count réservations expirées libérées.");
+            }
+
+            return $count;
+        });
+    }
+
     /**
      * Récupère les données du tableau de bord de réservation pour l'utilisateur connecté
      * GET /api/client/reservation/dashboard
@@ -24,28 +61,30 @@ class ReservationController extends Controller
     public function dashboard(): JsonResponse
     {
         try {
+            self::libererReservationsExpirees();
             $utilisateur = Auth::user();
-            $reservations = Reservation::with(['voyage.trajet.depart', 'voyage.trajet.arrivee'])
+            $reservationsFull = Reservation::with(['voyage.trajet.provinceDepart', 'voyage.trajet.provinceArrivee'])
                 ->where('util_id', $utilisateur->util_id)
                 ->orderBy('created_at', 'desc')
                 ->get();
 
+            // Filtrer pour exclure les abandons (statut 5) des statistiques et de l'historique
+            $reservations = $reservationsFull->whereIn('res_statut', [1, 2, 3, 4]);
+
             // Calcul des statistiques
             $stats = [
-                'total_reservations' => $reservations->count(),
-                'voyages_en_cours' => $reservations->where('res_statut', 2)->filter(function($res) {
-                    return $res->voyage && $res->voyage->voyage_date->isToday();
-                })->count(),
+                'total_reservations' => $reservations->whereIn('res_statut', [2, 3, 4])->count(),
+                'voyages_en_cours' => $reservations->where('res_statut', 2)->count(),
                 'voyages_annules' => $reservations->where('res_statut', 4)->count(),
             ];
 
-            // Historique récent (3 derniers)
-            $historique = $reservations->take(3)->map(function($res) {
+            // Historique récent (2 derniers)
+            $historique = $reservations->take(2)->map(function($res) {
                 return [
                     'id' => $res->res_id,
                     'numero' => $res->res_numero,
                     'trajet' => ($res->voyage && $res->voyage->trajet) ? 
-                        ($res->voyage->trajet->depart->pro_nom . ' → ' . $res->voyage->trajet->arrivee->pro_nom) : 'Trajet inconnu',
+                        ($res->voyage->trajet->provinceDepart->pro_nom . ' → ' . $res->voyage->trajet->provinceArrivee->pro_nom) : 'Trajet inconnu',
                     'date' => $res->voyage ? $res->voyage->voyage_date->format('d/m/Y') : 'N/A',
                     'heure' => $res->voyage ? $res->voyage->voyage_heure : 'N/A',
                     'montant' => $res->montant_total,
@@ -72,6 +111,55 @@ class ReservationController extends Controller
     }
 
     /**
+     * Liste toutes les réservations de l'utilisateur
+     * GET /api/client/reservation
+     */
+    public function index(): JsonResponse
+    {
+        try {
+            $utilisateur = Auth::user();
+            $reservations = Reservation::with(['voyage.trajet.provinceDepart', 'voyage.trajet.provinceArrivee'])
+                ->where('util_id', $utilisateur->util_id)
+                ->whereIn('res_statut', [1, 2, 3, 4])
+                ->orderBy('created_at', 'desc')
+                ->paginate(15);
+
+            $data = [
+                'items' => collect($reservations->items())->map(function($res) {
+                    return [
+                        'id' => $res->res_id,
+                        'numero' => $res->res_numero,
+                        'trajet' => ($res->voyage && $res->voyage->trajet) ? 
+                            ($res->voyage->trajet->provinceDepart->pro_nom . ' → ' . $res->voyage->trajet->provinceArrivee->pro_nom) : 'Trajet inconnu',
+                        'date' => $res->voyage ? $res->voyage->voyage_date->format('d/m/Y') : 'N/A',
+                        'heure' => $res->voyage ? $res->voyage->voyage_heure : 'N/A',
+                        'montant' => $res->montant_total,
+                        'statut' => $res->res_statut,
+                        'nb_voyageurs' => $res->nb_voyageurs
+                    ];
+                }),
+                'pagination' => [
+                    'total' => $reservations->total(),
+                    'current_page' => $reservations->currentPage(),
+                    'last_page' => $reservations->lastPage(),
+                    'per_page' => $reservations->perPage(),
+                ]
+            ];
+
+            return response()->json([
+                'statut' => true,
+                'message' => 'Historique des réservations récupéré avec succès',
+                'data' => $data
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'statut' => false,
+                'message' => 'Erreur lors de la récupération de l\'historique: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
      * Crée une nouvelle réservation (Étape 1-4 du Wizard)
      * POST /api/client/reservation
      */
@@ -79,7 +167,7 @@ class ReservationController extends Controller
     {
         try {
             $request->validate([
-                'voyage_id' => 'required|integer|exists:fandrio_app.voyages,voyage_id',
+                'voyage_id' => 'required|integer|exists:voyages,voyage_id',
                 'nb_voyageurs' => 'required|integer|min:1',
                 'montant_total' => 'required|numeric|min:0',
                 'sieges' => 'required|array|min:1',
@@ -87,7 +175,10 @@ class ReservationController extends Controller
                 'voyageurs' => 'required|array|min:1',
                 'voyageurs.*.nom' => 'required|string',
                 'voyageurs.*.prenom' => 'required|string',
-                'voyageurs.*.phone' => 'nullable|string',
+                'voyageurs.*.phone' => 'required|string',
+                'voyageurs.*.phone2' => 'required|string',
+                'voyageurs.*.cin' => 'nullable|string',
+                'voyageurs.*.age' => 'nullable|integer',
                 'voyageurs.*.siege_numero' => 'required|string',
             ]);
 
@@ -116,6 +207,8 @@ class ReservationController extends Controller
                     'res_statut' => 1,
                     'nb_voyageurs' => $request->nb_voyageurs,
                     'montant_total' => $request->montant_total,
+                    'montant_avance' => 0,
+                    'montant_restant' => $request->montant_total,
                     'date_limite_paiement' => now()->addMinutes(2),
                 ]);
 
@@ -124,7 +217,10 @@ class ReservationController extends Controller
                     $voyageur = Voyageur::create([
                         'voya_nom' => $vData['nom'],
                         'voya_prenom' => $vData['prenom'],
+                        'voya_age' => $vData['age'] ?? null,
+                        'voya_cin' => $vData['cin'] ?? null,
                         'voya_phone' => $vData['phone'] ?? null,
+                        'voya_phone2' => $vData['phone2'] ?? null,
                         'util_id' => $utilisateur->util_id
                     ]);
 
@@ -187,7 +283,7 @@ class ReservationController extends Controller
             }
 
             $request->validate([
-                'type_paie_id' => 'required|integer|exists:fandrio_app.types_paiement,type_paie_id',
+                'type_paie_id' => 'required|integer|exists:types_paiement,type_paie_id',
                 'numero_paiement' => 'nullable|string'
             ]);
 
@@ -223,6 +319,56 @@ class ReservationController extends Controller
     }
 
     /**
+     * Annule explicitement une réservation en cours (avant paiement)
+     * POST /api/client/reservation/{id}/cancel
+     */
+    public function cancel(int $id): JsonResponse
+    {
+        try {
+            $reservation = Reservation::findOrFail($id);
+
+            // Seul le propriétaire peut annuler
+            if ($reservation->util_id !== Auth::id()) {
+                return response()->json(['statut' => false, 'message' => 'Action non autorisée.'], 403);
+            }
+
+            if ($reservation->res_statut != 1) {
+                return response()->json(['statut' => false, 'message' => 'Cette réservation ne peut plus être annulée via ce processus.'], 400);
+            }
+
+            DB::transaction(function() use ($reservation) {
+                // On marque comme "Abandonnée" (5) pour ne pas polluer les stats "Annulées" (4)
+                $reservation->update(['res_statut' => 5]);
+
+                // Libérer les sièges associés immédiatement
+                SiegeReserve::where('res_id', $reservation->res_id)->update([
+                    'siege_statut' => 2,
+                    'utilisateur_id' => null,
+                    'res_id' => null,
+                    'expire_lock' => null
+                ]);
+            });
+
+            return response()->json([
+                'statut' => true,
+                'message' => 'Réservation annulée avec succès.'
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Erreur annulerReservation detaillee:', [
+                'message' => $e->getMessage(),
+                'reservation_id' => $id,
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
+            ]);
+            return response()->json([
+                'statut' => false,
+                'message' => 'Erreur lors de l’annulation: ' . $e->getMessage()
+            ], 400);
+        }
+    }
+
+    /**
      * Récupère les données de la facture / Ticket (Étape 6)
      * GET /api/client/reservation/{id}/invoice
      */
@@ -230,8 +376,8 @@ class ReservationController extends Controller
     {
         try {
             $reservation = Reservation::with([
-                'voyage.trajet.depart',
-                'voyage.trajet.arrivee',
+                'voyage.trajet.provinceDepart',
+                'voyage.trajet.provinceArrivee',
                 'voyage.trajet.compagnie',
                 'voyage.voiture.chauffeur',
                 'voyageurs'
@@ -257,8 +403,8 @@ class ReservationController extends Controller
                         'qr_string' => base64_encode($qrData) // On envoie le JSON encodé pour le QR
                     ],
                     'voyage' => [
-                        'depart' => $reservation->voyage->trajet->depart->pro_nom,
-                        'arrivee' => $reservation->voyage->trajet->arrivee->pro_nom,
+                        'depart' => $reservation->voyage->trajet->provinceDepart->pro_nom,
+                        'arrivee' => $reservation->voyage->trajet->provinceArrivee->pro_nom,
                         'date' => $reservation->voyage->voyage_date->format('d/m/Y'),
                         'heure' => $reservation->voyage->voyage_heure_depart,
                         'compagnie' => $reservation->voyage->trajet->compagnie->comp_nom,

@@ -5,6 +5,7 @@ namespace App\Services\Voiture;
 use App\Models\Voitures\SiegeReserve;
 use App\Models\Voyages\Voyage;
 use App\Models\Voitures\PlanSiege;
+use App\Http\Controllers\Client\ReservationController;
 use App\Helpers\DateFormatter;
 use App\Events\SiegeUpdated;
 use Illuminate\Support\Facades\DB;
@@ -23,6 +24,7 @@ class SiegeService
      */
     public function getPlanSieges(int $voyageId): array 
     {
+        ReservationController::libererReservationsExpirees();
         $cacheKey = self::CACHE_KEY_PREFIX . $voyageId;
 
         if (Cache::has($cacheKey)) {
@@ -234,10 +236,10 @@ class SiegeService
                 $siege['message'] = 'Réservé';
             } elseif (isset($tempMap[$numero])) {
                 $siege['statut'] = 'selectionne';
-                $siege['couleur'] = '#ffc107'; // Orange
+                $siege['couleur'] = '#FFA500'; // Orange/Jaune pour "En attente"
                 $siege['utilisateur_id'] = $tempMap[$numero]['utilisateur_id'];
                 $siege['expire_lock'] = $tempMap[$numero]['expire_lock'];
-                $siege['message'] = 'Sélectionné temporairement';
+                $siege['message'] = 'En attente';
             } else {
                 $siege['statut'] = 'disponible';
                 $siege['couleur'] = '#28a745'; // Vert

@@ -104,9 +104,11 @@ Route::middleware(['api.key', 'auth:api'])->group(function () {
 
     // Tableau de bord client (Statistiques et Historique)
     Route::prefix('client/reservation')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Client\ReservationController::class, 'index']);
         Route::get('/dashboard', [\App\Http\Controllers\Client\ReservationController::class, 'dashboard']);
         Route::post('/', [\App\Http\Controllers\Client\ReservationController::class, 'store']);
         Route::post('/{id}/confirm', [\App\Http\Controllers\Client\ReservationController::class, 'confirm']);
+        Route::post('/{id}/cancel', [\App\Http\Controllers\Client\ReservationController::class, 'cancel']);
         Route::get('/{id}/invoice', [\App\Http\Controllers\Client\ReservationController::class, 'getInvoice']);
     });
 });
@@ -219,4 +221,7 @@ Route::middleware(['api.key', 'auth:api', 'role:2'])->prefix('adminCompagnie')->
         Route::get('/{id}/statistiques', [PlanSiegeController::class, 'statistiques']);
         Route::get('/voiture/{voitureId}', [PlanSiegeController::class, 'obtenirParVoiture']);
     });
+
+    // Route pour la gestion des paiements de la compagnie
+    Route::put('/update-paiements', [CompagnieController::class, 'updatePaiements']);
 });

@@ -254,4 +254,49 @@ class CompagnieController extends Controller
             ], 400);
         }
     }
+
+    /**
+     * Met à jour les modes de paiement de la compagnie (pour admin compagnie)
+     */
+    public function updatePaiements(Request $request): JsonResponse
+    {
+        try {
+            $compagnieId = $request->user()->comp_id;
+            
+            if (!$compagnieId) {
+                return response()->json([
+                    'statut' => false,
+                    'message' => 'L\'utilisateur n\'est pas rattaché à une compagnie'
+                ], 403);
+            }
+
+            $request->validate([
+                'modes_paiement' => 'required|array',
+                'modes_paiement.*.id' => 'required|integer|exists:types_paiement,type_paie_id',
+                'modes_paiement.*.numero' => 'nullable|string|max:20',
+                'modes_paiement.*.titulaire' => 'nullable|string|max:100',
+            ]);
+
+            $resultat = $this->compagnieService->updateModesPaiement($compagnieId, $request->modes_paiement);
+
+            return response()->json([
+                'statut' => true,
+                'message' => 'Modes de paiement mis à jour avec succès',
+                'data' => $resultat
+            ]);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'statut' => false,
+                'message' => 'Données invalides',
+                'erreurs' => $e->errors()
+            ], 422);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'statut' => false,
+                'message' => $e->getMessage()
+            ], 400);
+        }
+    }
 }

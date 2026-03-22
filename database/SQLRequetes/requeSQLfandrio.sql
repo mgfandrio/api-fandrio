@@ -171,8 +171,7 @@ CREATE TABLE fandrio_app.voyages (
     places_reservees INTEGER DEFAULT 0 CHECK (places_reservees >= 0),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CHECK (places_reservees <= places_disponibles),
-    CHECK (voyage_date >= CURRENT_DATE)
+    CHECK (places_reservees <= places_disponibles)
 );
 
 -- =============================================================================

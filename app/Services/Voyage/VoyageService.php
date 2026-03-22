@@ -81,6 +81,17 @@ class VoyageService
     {
         $compagnieId = $this->getCompagnieUtilisateur();
 
+        // Passer automatiquement en "terminé" les voyages programmés dont la date est passée
+        Voyage::whereHas('trajet', function($q) use ($compagnieId) {
+                $q->where('comp_id', $compagnieId);
+            })
+            ->where('voyage_statut', 1) // programmé
+            ->where('voyage_date', '<', now()->toDateString())
+            ->update([
+                'voyage_statut' => 3, // terminé
+                'voyage_is_active' => false
+            ]);
+
         $query = Voyage::with(['trajet.provinceDepart', 'trajet.provinceArrivee', 'voiture'])
             ->whereHas('trajet', function($q) use ($compagnieId) {
                 $q->where('comp_id', $compagnieId);

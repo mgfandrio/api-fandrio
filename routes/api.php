@@ -21,6 +21,7 @@ use App\Http\Controllers\Client\RechercheController;
 use App\Http\Controllers\Client\DisponibiliteController;
 use App\Http\Controllers\Voiture\SiegeController;
 use App\Http\Controllers\Voiture\PlanSiegeController;
+use App\Http\Controllers\AdminCompagnie\ReservationAdminController;
 use Illuminate\Support\Facades\Route;
 
 // Routes publiques (nécessitent seulement la clé API)
@@ -224,4 +225,13 @@ Route::middleware(['api.key', 'auth:api', 'role:2'])->prefix('adminCompagnie')->
 
     // Route pour la gestion des paiements de la compagnie
     Route::put('/update-paiements', [CompagnieController::class, 'updatePaiements']);
+
+    // Routes pour la gestion des réservations (admin compagnie)
+    Route::prefix('reservations')->group(function () {
+        Route::get('/voyages', [ReservationAdminController::class, 'voyagesAvecReservations']);
+        Route::get('/voyages/{voyageId}/plan-sieges', [ReservationAdminController::class, 'planSieges']);
+        Route::get('/voyages/{voyageId}/voyageurs', [ReservationAdminController::class, 'voyageurs']);
+        Route::get('/voyages/{voyageId}/billets', [ReservationAdminController::class, 'billets']);
+        Route::get('/statistiques', [ReservationAdminController::class, 'statistiques']);
+    });
 });

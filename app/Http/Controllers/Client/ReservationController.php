@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Client;
 
 use App\Http\Controllers\Controller;
 use App\Models\Reservation\Reservation;
+use App\Events\SiegeUpdated;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 use App\Helpers\DateFormatter;
@@ -37,13 +38,27 @@ class ReservationController extends Controller
                 // Marquer la réservation comme annulée
                 $res->update(['res_statut' => 4]);
 
+                $voyageId = $res->voyage_id;
+
                 // Libérer les sièges associés
-                SiegeReserve::where('res_id', $res->res_id)->update([
-                    'siege_statut' => 2,
-                    'utilisateur_id' => null,
-                    'res_id' => null,
-                    'expire_lock' => null
-                ]);
+                $sieges = SiegeReserve::where('res_id', $res->res_id)->get();
+                foreach ($sieges as $siege) {
+                    $siegeNumero = $siege->siege_numero;
+                    $siege->update([
+                        'siege_statut' => 2,
+                        'utilisateur_id' => null,
+                        'res_id' => null,
+                        'expire_lock' => null
+                    ]);
+
+                    broadcast(new SiegeUpdated(
+                        $voyageId,
+                        $siegeNumero,
+                        'expire',
+                        null,
+                        ['siege' => $siegeNumero, 'statut' => 2, 'disponible' => true, 'utilisateur_id' => null, 'expire_lock' => null]
+                    ))->toOthers();
+                }
             }
 
             if ($count > 0) {
@@ -240,6 +255,15 @@ class ReservationController extends Controller
                             'utilisateur_id' => $utilisateur->util_id,
                             'expire_lock' => $reservation->date_limite_paiement
                         ]);
+
+                    // Diffuser la mise à jour en temps réel
+                    broadcast(new SiegeUpdated(
+                        $voyageId,
+                        $vData['siege_numero'],
+                        'selectionne',
+                        $utilisateur->util_id,
+                        ['siege' => $vData['siege_numero'], 'statut' => 3, 'disponible' => false, 'utilisateur_id' => $utilisateur->util_id, 'expire_lock' => DateFormatter::formatDateTime($reservation->date_limite_paiement)]
+                    ))->toOthers();
                 }
 
                 // Mise à jour du nombre de places réservées dans le voyage (optionnel, selon la logique métier)
@@ -296,10 +320,21 @@ class ReservationController extends Controller
                 ]);
 
                 // Marquer les sièges comme définitivement réservés (Statut 1)
-                SiegeReserve::where('res_id', $reservation->res_id)->update([
-                    'siege_statut' => 1,
-                    'expire_lock' => null
-                ]);
+                $sieges = SiegeReserve::where('res_id', $reservation->res_id)->get();
+                foreach ($sieges as $siege) {
+                    $siege->update([
+                        'siege_statut' => 1,
+                        'expire_lock' => null
+                    ]);
+
+                    broadcast(new SiegeUpdated(
+                        $reservation->voyage_id,
+                        $siege->siege_numero,
+                        'reserve',
+                        $siege->utilisateur_id,
+                        ['siege' => $siege->siege_numero, 'statut' => 1, 'disponible' => false, 'utilisateur_id' => $siege->utilisateur_id, 'expire_lock' => null]
+                    ))->toOthers();
+                }
 
                 // Incrémenter les places réservées dans le voyage
                 Voyage::where('voyage_id', $reservation->voyage_id)->increment('places_reservees', $reservation->nb_voyageurs);
@@ -341,12 +376,24 @@ class ReservationController extends Controller
                 $reservation->update(['res_statut' => 5]);
 
                 // Libérer les sièges associés immédiatement
-                SiegeReserve::where('res_id', $reservation->res_id)->update([
-                    'siege_statut' => 2,
-                    'utilisateur_id' => null,
-                    'res_id' => null,
-                    'expire_lock' => null
-                ]);
+                $sieges = SiegeReserve::where('res_id', $reservation->res_id)->get();
+                foreach ($sieges as $siege) {
+                    $siegeNumero = $siege->siege_numero;
+                    $siege->update([
+                        'siege_statut' => 2,
+                        'utilisateur_id' => null,
+                        'res_id' => null,
+                        'expire_lock' => null
+                    ]);
+
+                    broadcast(new SiegeUpdated(
+                        $reservation->voyage_id,
+                        $siegeNumero,
+                        'libere',
+                        null,
+                        ['siege' => $siegeNumero, 'statut' => 2, 'disponible' => true, 'utilisateur_id' => null, 'expire_lock' => null]
+                    ))->toOthers();
+                }
             });
 
             return response()->json([

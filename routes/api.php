@@ -22,6 +22,7 @@ use App\Http\Controllers\Client\DisponibiliteController;
 use App\Http\Controllers\Voiture\SiegeController;
 use App\Http\Controllers\Voiture\PlanSiegeController;
 use App\Http\Controllers\AdminCompagnie\ReservationAdminController;
+use App\Http\Controllers\Notification\NotificationController;
 use Illuminate\Support\Facades\Route;
 
 // Routes publiques (nécessitent seulement la clé API)
@@ -101,6 +102,16 @@ Route::middleware(['api.key', 'auth:api'])->group(function () {
         Route::delete('/{id}', [VoyageurController::class, 'destroy']);                     // Supprimer un voyageur
         Route::delete('/multiple', [VoyageurController::class, 'destroyMultiple']);         // Supprimer plusieurs voyageurs
         Route::get('/reservation/{resId}', [VoyageurController::class, 'parReservation']);  // Voyageurs d'une réservation
+    });
+
+    // Notifications (pour tous les utilisateurs authentifiés)
+    Route::prefix('notifications')->group(function () {
+        Route::get('/', [NotificationController::class, 'index']);
+        Route::get('/unread-count', [NotificationController::class, 'unreadCount']);
+        Route::patch('/{id}/read', [NotificationController::class, 'markAsRead']);
+        Route::patch('/read-all', [NotificationController::class, 'markAllAsRead']);
+        Route::post('/push-token', [NotificationController::class, 'registerPushToken']);
+        Route::delete('/push-token', [NotificationController::class, 'unregisterPushToken']);
     });
 
     // Tableau de bord client (Statistiques et Historique)

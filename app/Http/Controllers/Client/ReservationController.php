@@ -15,6 +15,7 @@ use App\Models\Voyages\Voyage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use SimpleSoftwareIO\QrCode\Facades\QrCode;
+use App\Services\Notification\NotificationService;
 
 use Illuminate\Support\Facades\Log;
 
@@ -340,6 +341,26 @@ class ReservationController extends Controller
                 Voyage::where('voyage_id', $reservation->voyage_id)->increment('places_reservees', $reservation->nb_voyageurs);
             });
 
+            // Notifier l'admin compagnie
+            try {
+                $reservation->load(['voyage.trajet.provinceDepart', 'voyage.trajet.provinceArrivee', 'utilisateur']);
+                $voyage = $reservation->voyage;
+                $client = $reservation->utilisateur;
+                $clientNom = ($client->util_prenom ?? '') . ' ' . ($client->util_nom ?? '');
+                $depart = $voyage->trajet->provinceDepart->pro_nom ?? 'N/A';
+                $arrivee = $voyage->trajet->provinceArrivee->pro_nom ?? 'N/A';
+                $voyageInfo = "{$depart} → {$arrivee} ({$voyage->voyage_date->format('d/m/Y')})";
+                
+                NotificationService::notifierAdminReservation(
+                    $voyage->trajet->comp_id,
+                    $reservation->res_id,
+                    trim($clientNom),
+                    $voyageInfo
+                );
+            } catch (\Exception $notifError) {
+                Log::warning('Notification admin failed: ' . $notifError->getMessage());
+            }
+
             return response()->json([
                 'statut' => true,
                 'message' => 'Réservation confirmée avec succès.'
@@ -427,15 +448,34 @@ class ReservationController extends Controller
                 'voyage.trajet.provinceArrivee',
                 'voyage.trajet.compagnie',
                 'voyage.voiture.chauffeur',
-                'voyageurs'
+                'voyageurs',
+                'utilisateur'
             ])->findOrFail($id);
 
-            // Génération d'une chaîne pour le QR Code
+            $typePaiement = null;
+            if ($reservation->type_paie_id) {
+                $typePaiement = \App\Models\Paiements\TypePaiement::find($reservation->type_paie_id);
+            }
+
+            // Données complètes pour le QR Code (scannable par la compagnie)
             $qrData = json_encode([
-                'res' => $reservation->res_numero,
-                'client' => $reservation->utilisateur->util_nom ?? 'Client',
-                'voyage' => $reservation->voyage_id,
-                'date' => $reservation->voyage->voyage_date->format('Y-m-d')
+                'app' => 'FANDRIO',
+                'res_numero' => $reservation->res_numero,
+                'res_id' => $reservation->res_id,
+                'client' => [
+                    'nom' => ($reservation->utilisateur->util_prenom ?? '') . ' ' . ($reservation->utilisateur->util_nom ?? ''),
+                    'telephone' => $reservation->utilisateur->util_telephone ?? '',
+                ],
+                'voyage_id' => $reservation->voyage_id,
+                'trajet' => ($reservation->voyage->trajet->provinceDepart->pro_nom ?? '') . ' → ' . ($reservation->voyage->trajet->provinceArrivee->pro_nom ?? ''),
+                'date' => $reservation->voyage->voyage_date->format('Y-m-d'),
+                'heure' => $reservation->voyage->voyage_heure_depart,
+                'compagnie' => $reservation->voyage->trajet->compagnie->comp_nom ?? '',
+                'nb_voyageurs' => $reservation->nb_voyageurs,
+                'montant_total' => (float) $reservation->montant_total,
+                'paiement' => $typePaiement ? $typePaiement->type_paie_nom : null,
+                'sieges' => $reservation->voyageurs->pluck('pivot.place_numero')->values()->toArray(),
+                'confirme_le' => $reservation->updated_at->format('Y-m-d H:i:s'),
             ]);
 
             return response()->json([
@@ -446,8 +486,13 @@ class ReservationController extends Controller
                         'numero' => $reservation->res_numero,
                         'statut' => $reservation->res_statut,
                         'montant' => $reservation->montant_total,
+                        'nb_voyageurs' => $reservation->nb_voyageurs,
                         'date_reservation' => $reservation->created_at->format('d/m/Y H:i'),
-                        'qr_string' => base64_encode($qrData) // On envoie le JSON encodé pour le QR
+                        'paiement' => $typePaiement ? [
+                            'type' => $typePaiement->type_paie_nom,
+                            'numero' => $reservation->numero_paiement,
+                        ] : null,
+                        'qr_data' => base64_encode($qrData),
                     ],
                     'voyage' => [
                         'depart' => $reservation->voyage->trajet->provinceDepart->pro_nom,
@@ -455,14 +500,14 @@ class ReservationController extends Controller
                         'date' => $reservation->voyage->voyage_date->format('d/m/Y'),
                         'heure' => $reservation->voyage->voyage_heure_depart,
                         'compagnie' => $reservation->voyage->trajet->compagnie->comp_nom,
-                        'matricule' => $reservation->voyage->voiture->voit_matricule
+                        'matricule' => $reservation->voyage->voiture->voit_matricule,
                     ],
                     'voyageurs' => $reservation->voyageurs->map(function($v) {
                         return [
-                            'nom' => $v->voya_nom . ' ' . $v->voya_prenom,
-                            'siege' => $v->pivot->place_numero
+                            'nom' => $v->voya_prenom . ' ' . $v->voya_nom,
+                            'siege' => $v->pivot->place_numero,
                         ];
-                    })
+                    }),
                 ]
             ]);
 

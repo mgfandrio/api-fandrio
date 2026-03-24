@@ -14,6 +14,9 @@ class Kernel extends ConsoleKernel
     {
         // Nettoyer les locks toutes les minutes
         $schedule->command('sieges:nettoyer-locks')->everyMinute();
+
+        // Rappels de voyage : 2 jours, 1 jour, jour J (chaque jour à 7h)
+        $schedule->command('voyages:rappels')->dailyAt('07:00');
     }
 
     /**

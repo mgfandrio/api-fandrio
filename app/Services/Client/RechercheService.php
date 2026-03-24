@@ -317,7 +317,16 @@ class RechercheService
                 'id' => $compagnie->comp_id,
                 'nom' => $compagnie->comp_nom,
                 'logo' => $compagnie->comp_logo,
-                'note' => null // À implémenter avec un système de notation
+                'note' => null, // À implémenter avec un système de notation
+                'modes_paiement' => $compagnie->modesPaiement->map(function($mode) {
+                    return [
+                        'type_paie_id' => $mode->type_paie_id,
+                        'nom_paie' => $mode->type_paie_nom,
+                        'type_paie' => $mode->type_paie_type == 1 ? 'mobile_money' : 'cash',
+                        'numero' => $mode->pivot->comp_paie_numero ?? null,
+                        'titulaire' => $mode->pivot->comp_paie_titulaire ?? null,
+                    ];
+                }),
             ],
             'voiture' => [
                 'matricule' => $voiture->voit_matricule,
@@ -363,7 +372,9 @@ class RechercheService
             return [
                 'type_paie_id' => $mode->type_paie_id,
                 'nom_paie' => $mode->type_paie_nom,
-                'type_paie' => $mode->type_paie_type == 1 ? 'mobile_money' : 'cash'
+                'type_paie' => $mode->type_paie_type == 1 ? 'mobile_money' : 'cash',
+                'numero' => $mode->pivot->comp_paie_numero ?? null,
+                'titulaire' => $mode->pivot->comp_paie_titulaire ?? null,
             ];
         });
 

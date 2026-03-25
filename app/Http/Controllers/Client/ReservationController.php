@@ -309,14 +309,37 @@ class ReservationController extends Controller
 
             $request->validate([
                 'type_paie_id' => 'required|integer|exists:types_paiement,type_paie_id',
-                'numero_paiement' => 'nullable|string'
+                'numero_paiement' => 'required|string|min:5|max:50'
             ]);
 
-            DB::transaction(function() use ($reservation, $request) {
+            // Sanitisation : supprimer tout caractère non alphanumérique (sauf tirets)
+            $numeroPaiement = preg_replace('/[^a-zA-Z0-9\-]/', '', $request->numero_paiement);
+
+            if (strlen($numeroPaiement) < 5) {
+                return response()->json([
+                    'statut' => false,
+                    'message' => 'Le numéro de référence est trop court (minimum 5 caractères).'
+                ], 422);
+            }
+
+            // Vérifier l'unicité du numéro de référence
+            $existe = Reservation::where('numero_paiement', $numeroPaiement)
+                ->where('res_statut', 2) // Seulement les confirmées
+                ->where('res_id', '!=', $reservation->res_id)
+                ->exists();
+
+            if ($existe) {
+                return response()->json([
+                    'statut' => false,
+                    'message' => 'Ce numéro de référence a déjà été utilisé pour une autre réservation.'
+                ], 422);
+            }
+
+            DB::transaction(function() use ($reservation, $request, $numeroPaiement) {
                 $reservation->update([
                     'res_statut' => 2, // Confirmé
                     'type_paie_id' => $request->type_paie_id,
-                    'numero_paiement' => $request->numero_paiement,
+                    'numero_paiement' => $numeroPaiement,
                     'date_limite_paiement' => null // Délai levé
                 ]);
 

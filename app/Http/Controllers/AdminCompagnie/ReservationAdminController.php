@@ -393,4 +393,418 @@ class ReservationAdminController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Tableau de bord financier enrichi
+     * GET /api/adminCompagnie/reservations/tableau-bord-financier
+     */
+    public function tableauBordFinancier(): JsonResponse
+    {
+        try {
+            $compagnieId = $this->getCompagnieId();
+
+            $voyageIds = Voyage::whereHas('trajet', fn($q) => $q->where('comp_id', $compagnieId))
+                ->pluck('voyage_id');
+
+            $reservationsBase = Reservation::whereIn('voyage_id', $voyageIds)
+                ->where('res_statut', 2);
+
+            // CA par période
+            $aujourdhui = (float)(clone $reservationsBase)->whereDate('created_at', today())->sum('montant_total');
+            $cetteSemaine = (float)(clone $reservationsBase)->whereBetween('created_at', [now()->startOfWeek(), now()->endOfWeek()])->sum('montant_total');
+            $ceMois = (float)(clone $reservationsBase)->whereMonth('created_at', now()->month)->whereYear('created_at', now()->year)->sum('montant_total');
+            $cetteAnnee = (float)(clone $reservationsBase)->whereYear('created_at', now()->year)->sum('montant_total');
+
+            // Mois dernier (pour comparaison)
+            $moisDernier = (float)(clone $reservationsBase)
+                ->whereMonth('created_at', now()->subMonth()->month)
+                ->whereYear('created_at', now()->subMonth()->year)
+                ->sum('montant_total');
+
+            $evolutionMois = ($moisDernier > 0) ? round((($ceMois - $moisDernier) / $moisDernier) * 100, 1) : null;
+
+            // Évolution CA sur les 30 derniers jours
+            $evolutionJournaliere = (clone $reservationsBase)
+                ->where('created_at', '>=', now()->subDays(30))
+                ->select(
+                    DB::raw("created_at::date as jour"),
+                    DB::raw("SUM(montant_total) as ca"),
+                    DB::raw("COUNT(*) as nb_reservations")
+                )
+                ->groupBy('jour')
+                ->orderBy('jour')
+                ->get();
+
+            // Évolution CA sur les 12 derniers mois
+            $evolutionMensuelle = (clone $reservationsBase)
+                ->where('created_at', '>=', now()->subMonths(12))
+                ->select(
+                    DB::raw("TO_CHAR(created_at, 'YYYY-MM') as mois"),
+                    DB::raw("SUM(montant_total) as ca"),
+                    DB::raw("COUNT(*) as nb_reservations"),
+                    DB::raw("SUM(nb_voyageurs) as nb_voyageurs")
+                )
+                ->groupBy('mois')
+                ->orderBy('mois')
+                ->get();
+
+            // Taux de remplissage moyen
+            $tauxData = Voyage::whereIn('voyage_id', $voyageIds)
+                ->where('places_disponibles', '>', 0)
+                ->whereIn('voyage_statut', [1, 2, 3])
+                ->select(DB::raw('AVG(CASE WHEN places_disponibles > 0 THEN (places_reservees * 100.0 / places_disponibles) ELSE 0 END) as taux_moyen'))
+                ->first();
+            $tauxRemplissage = round($tauxData->taux_moyen ?? 0, 1);
+
+            // Répartition paiements
+            $typesPaiement = TypePaiement::pluck('type_paie_nom', 'type_paie_id');
+            $repartitionPaiement = (clone $reservationsBase)
+                ->select('type_paie_id', DB::raw('COUNT(*) as count'), DB::raw('SUM(montant_total) as montant'))
+                ->groupBy('type_paie_id')
+                ->get()
+                ->map(fn($item) => [
+                    'type' => $typesPaiement[$item->type_paie_id] ?? 'Non défini',
+                    'type_id' => $item->type_paie_id,
+                    'count' => (int)$item->count,
+                    'montant' => (float)$item->montant,
+                ]);
+
+            // Totaux
+            $totalReservations = (clone $reservationsBase)->count();
+            $totalVoyageurs = (int)(clone $reservationsBase)->sum('nb_voyageurs');
+            $totalVoyages = Voyage::whereIn('voyage_id', $voyageIds)->count();
+            $voyagesComplets = Voyage::whereIn('voyage_id', $voyageIds)
+                ->whereRaw('places_reservees >= places_disponibles')
+                ->where('places_disponibles', '>', 0)
+                ->count();
+
+            // Réservations aujourd'hui
+            $reservationsAujourdhui = (clone $reservationsBase)->whereDate('created_at', today())->count();
+
+            // Prochains voyages (5 prochains)
+            $prochainsVoyages = Voyage::with(['trajet.provinceDepart', 'trajet.provinceArrivee', 'voiture'])
+                ->whereIn('voyage_id', $voyageIds)
+                ->whereIn('voyage_statut', [1, 2])
+                ->where('voyage_date', '>=', today())
+                ->orderBy('voyage_date')
+                ->orderBy('voyage_heure_depart')
+                ->limit(5)
+                ->get()
+                ->map(fn($v) => [
+                    'voyage_id' => $v->voyage_id,
+                    'date' => $v->voyage_date->format('d/m/Y'),
+                    'heure' => $v->voyage_heure_depart,
+                    'trajet' => $v->trajet ? ($v->trajet->provinceDepart->pro_nom . ' → ' . $v->trajet->provinceArrivee->pro_nom) : null,
+                    'places_reservees' => $v->places_reservees,
+                    'places_disponibles' => $v->places_disponibles,
+                    'statut' => $v->voyage_statut,
+                    'voiture' => $v->voiture?->voit_matricule,
+                ]);
+
+            // Réservations récentes (5 dernières)
+            $reservationsRecentes = Reservation::with(['utilisateur', 'voyage.trajet.provinceDepart', 'voyage.trajet.provinceArrivee'])
+                ->whereIn('voyage_id', $voyageIds)
+                ->where('res_statut', 2)
+                ->orderBy('created_at', 'desc')
+                ->limit(5)
+                ->get()
+                ->map(fn($res) => [
+                    'res_numero' => $res->res_numero,
+                    'date' => $res->created_at->format('d/m/Y H:i'),
+                    'montant' => (float)$res->montant_total,
+                    'nb_voyageurs' => $res->nb_voyageurs,
+                    'client' => $res->utilisateur ? ($res->utilisateur->util_prenom . ' ' . $res->utilisateur->util_nom) : null,
+                    'trajet' => $res->voyage?->trajet ? ($res->voyage->trajet->provinceDepart->pro_nom . ' → ' . $res->voyage->trajet->provinceArrivee->pro_nom) : null,
+                    'type_paiement' => $typesPaiement[$res->type_paie_id] ?? null,
+                ]);
+
+            return response()->json([
+                'statut' => true,
+                'data' => [
+                    'ca' => [
+                        'aujourdhui' => $aujourdhui,
+                        'cette_semaine' => $cetteSemaine,
+                        'ce_mois' => $ceMois,
+                        'cette_annee' => $cetteAnnee,
+                        'mois_dernier' => $moisDernier,
+                        'evolution_mois' => $evolutionMois,
+                    ],
+                    'evolution_journaliere' => $evolutionJournaliere,
+                    'evolution_mensuelle' => $evolutionMensuelle,
+                    'taux_remplissage' => $tauxRemplissage,
+                    'totaux' => [
+                        'reservations' => $totalReservations,
+                        'reservations_aujourdhui' => $reservationsAujourdhui,
+                        'voyageurs' => $totalVoyageurs,
+                        'voyages' => $totalVoyages,
+                        'voyages_complets' => $voyagesComplets,
+                    ],
+                    'repartition_paiement' => $repartitionPaiement,
+                    'prochains_voyages' => $prochainsVoyages,
+                    'reservations_recentes' => $reservationsRecentes,
+                ]
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'statut' => false,
+                'message' => 'Erreur: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Registre global des factures/réservations
+     * GET /api/adminCompagnie/reservations/factures
+     */
+    public function factures(Request $request): JsonResponse
+    {
+        try {
+            $compagnieId = $this->getCompagnieId();
+
+            $voyageIds = Voyage::whereHas('trajet', fn($q) => $q->where('comp_id', $compagnieId))
+                ->pluck('voyage_id');
+
+            $query = Reservation::with(['utilisateur', 'voyage.trajet.provinceDepart', 'voyage.trajet.provinceArrivee'])
+                ->whereIn('voyage_id', $voyageIds)
+                ->where('res_statut', 2);
+
+            // Filtre par dates
+            if ($request->filled('date_debut')) {
+                $query->whereDate('created_at', '>=', $request->date_debut);
+            }
+            if ($request->filled('date_fin')) {
+                $query->whereDate('created_at', '<=', $request->date_fin);
+            }
+
+            // Filtre par type de paiement
+            if ($request->filled('type_paie_id')) {
+                $query->where('type_paie_id', $request->type_paie_id);
+            }
+
+            // Recherche par nom/telephone/numero
+            if ($request->filled('search')) {
+                $search = $request->search;
+                $query->where(function ($q) use ($search) {
+                    $q->where('res_numero', 'ILIKE', "%{$search}%")
+                      ->orWhere('numero_paiement', 'ILIKE', "%{$search}%")
+                      ->orWhereHas('utilisateur', function ($uq) use ($search) {
+                          $uq->where('util_nom', 'ILIKE', "%{$search}%")
+                             ->orWhere('util_prenom', 'ILIKE', "%{$search}%")
+                             ->orWhere('util_telephone', 'ILIKE', "%{$search}%");
+                      });
+                });
+            }
+
+            // Résumé avant pagination
+            $totalMontant = (float)(clone $query)->sum('montant_total');
+            $totalCount = (clone $query)->count();
+            $totalVoyageurs = (int)(clone $query)->sum('nb_voyageurs');
+
+            // Pagination
+            $typesPaiement = TypePaiement::pluck('type_paie_nom', 'type_paie_id');
+            $factures = $query->orderBy('created_at', 'desc')
+                ->paginate($request->get('per_page', 20));
+
+            $data = $factures->getCollection()->map(function ($res) use ($typesPaiement) {
+                return [
+                    'res_id' => $res->res_id,
+                    'res_numero' => $res->res_numero,
+                    'date' => $res->created_at->format('d/m/Y H:i'),
+                    'date_raw' => $res->created_at->toISOString(),
+                    'client' => $res->utilisateur ? [
+                        'nom' => $res->utilisateur->util_prenom . ' ' . $res->utilisateur->util_nom,
+                        'telephone' => $res->utilisateur->util_telephone,
+                    ] : null,
+                    'trajet' => $res->voyage?->trajet ? ($res->voyage->trajet->provinceDepart->pro_nom . ' → ' . $res->voyage->trajet->provinceArrivee->pro_nom) : null,
+                    'voyage_date' => $res->voyage?->voyage_date?->format('d/m/Y'),
+                    'nb_voyageurs' => $res->nb_voyageurs,
+                    'montant_total' => (float)$res->montant_total,
+                    'montant_avance' => (float)($res->montant_avance ?? 0),
+                    'montant_restant' => (float)($res->montant_restant ?? 0),
+                    'type_paiement' => $typesPaiement[$res->type_paie_id] ?? 'Non défini',
+                    'type_paie_id' => $res->type_paie_id,
+                    'numero_paiement' => $res->numero_paiement,
+                ];
+            });
+
+            return response()->json([
+                'statut' => true,
+                'data' => [
+                    'resume' => [
+                        'total_montant' => $totalMontant,
+                        'total_factures' => $totalCount,
+                        'total_voyageurs' => $totalVoyageurs,
+                    ],
+                    'factures' => $data,
+                    'pagination' => [
+                        'total' => $factures->total(),
+                        'current_page' => $factures->currentPage(),
+                        'last_page' => $factures->lastPage(),
+                        'per_page' => $factures->perPage(),
+                    ],
+                ]
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'statut' => false,
+                'message' => 'Erreur: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Scanner QR - Validation d'un billet
+     * POST /api/adminCompagnie/reservations/scanner-qr
+     */
+    public function scannerQR(Request $request): JsonResponse
+    {
+        try {
+            $compagnieId = $this->getCompagnieId();
+
+            $request->validate([
+                'qr_data' => 'required|string'
+            ]);
+
+            // Décoder le QR (base64 → JSON)
+            $decoded = base64_decode($request->qr_data, true);
+            if (!$decoded) {
+                return response()->json(['statut' => false, 'message' => 'QR Code invalide.', 'validation' => 'invalide'], 400);
+            }
+
+            $qrInfo = json_decode($decoded, true);
+            if (!$qrInfo || ($qrInfo['app'] ?? '') !== 'FANDRIO') {
+                return response()->json(['statut' => false, 'message' => 'Ce QR Code n\'est pas un billet FANDRIO.', 'validation' => 'invalide'], 400);
+            }
+
+            $resId = $qrInfo['res_id'] ?? null;
+            if (!$resId) {
+                return response()->json(['statut' => false, 'message' => 'QR Code incomplet.', 'validation' => 'invalide'], 400);
+            }
+
+            $reservation = Reservation::with([
+                'utilisateur',
+                'voyage.trajet.provinceDepart',
+                'voyage.trajet.provinceArrivee',
+                'voyage.trajet',
+                'voyageurs'
+            ])->find($resId);
+
+            if (!$reservation) {
+                return response()->json(['statut' => false, 'message' => 'Réservation introuvable.', 'validation' => 'invalide'], 400);
+            }
+
+            // Vérifier que la réservation appartient à cette compagnie
+            $voyage = $reservation->voyage;
+            if (!$voyage || !$voyage->trajet || $voyage->trajet->comp_id !== $compagnieId) {
+                return response()->json(['statut' => false, 'message' => 'Cette réservation ne concerne pas votre compagnie.', 'validation' => 'invalide'], 403);
+            }
+
+            // Vérifier le statut
+            if ($reservation->res_statut !== 2) {
+                $statutLabel = match ($reservation->res_statut) {
+                    1 => 'en attente de paiement',
+                    3 => 'terminée',
+                    4 => 'annulée',
+                    5 => 'abandonnée',
+                    default => 'dans un état inconnu'
+                };
+                return response()->json([
+                    'statut' => false,
+                    'message' => "Ce billet est {$statutLabel}.",
+                    'validation' => 'invalide'
+                ], 400);
+            }
+
+            // Vérifier la date du voyage
+            $estAujourdhui = $voyage->voyage_date->isToday();
+            $estPasse = $voyage->voyage_date->isPast() && !$estAujourdhui;
+
+            $typesPaiement = TypePaiement::pluck('type_paie_nom', 'type_paie_id');
+
+            // Voyageurs avec statut embarquement
+            $voyageurs = $reservation->voyageurs->map(fn($v) => [
+                'id' => $v->voya_id,
+                'nom' => $v->voya_prenom . ' ' . $v->voya_nom,
+                'siege' => $v->pivot->place_numero,
+                'embarque' => ($v->pivot->res_voya_statut ?? 1) >= 2,
+            ]);
+
+            $tousEmbarques = $voyageurs->every(fn($v) => $v['embarque']);
+
+            return response()->json([
+                'statut' => true,
+                'validation' => $estAujourdhui ? 'valide' : ($estPasse ? 'passe' : 'futur'),
+                'message' => $estAujourdhui
+                    ? 'Billet valide pour aujourd\'hui !'
+                    : ($estPasse
+                        ? 'Ce voyage est déjà passé (' . $voyage->voyage_date->format('d/m/Y') . ')'
+                        : 'Billet valide mais le voyage est prévu le ' . $voyage->voyage_date->format('d/m/Y')),
+                'data' => [
+                    'reservation' => [
+                        'res_id' => $reservation->res_id,
+                        'res_numero' => $reservation->res_numero,
+                        'date_reservation' => $reservation->created_at->format('d/m/Y H:i'),
+                        'montant_total' => (float)$reservation->montant_total,
+                        'nb_voyageurs' => $reservation->nb_voyageurs,
+                        'type_paiement' => $typesPaiement[$reservation->type_paie_id] ?? null,
+                        'numero_paiement' => $reservation->numero_paiement,
+                        'tous_embarques' => $tousEmbarques,
+                    ],
+                    'voyage' => [
+                        'voyage_id' => $voyage->voyage_id,
+                        'date' => $voyage->voyage_date->format('d/m/Y'),
+                        'heure' => $voyage->voyage_heure_depart,
+                        'trajet' => ($voyage->trajet->provinceDepart->pro_nom ?? '') . ' → ' . ($voyage->trajet->provinceArrivee->pro_nom ?? ''),
+                    ],
+                    'client' => $reservation->utilisateur ? [
+                        'nom' => ($reservation->utilisateur->util_prenom ?? '') . ' ' . ($reservation->utilisateur->util_nom ?? ''),
+                        'telephone' => $reservation->utilisateur->util_telephone ?? '',
+                    ] : null,
+                    'voyageurs' => $voyageurs,
+                ]
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'statut' => false,
+                'message' => 'Erreur: ' . $e->getMessage(),
+                'validation' => 'erreur'
+            ], 500);
+        }
+    }
+
+    /**
+     * Marquer les voyageurs comme embarqués
+     * POST /api/adminCompagnie/reservations/{resId}/embarquer
+     */
+    public function embarquer(int $resId): JsonResponse
+    {
+        try {
+            $compagnieId = $this->getCompagnieId();
+
+            $reservation = Reservation::with(['voyage.trajet'])->findOrFail($resId);
+
+            if ($reservation->voyage->trajet->comp_id !== $compagnieId) {
+                return response()->json(['statut' => false, 'message' => 'Non autorisé.'], 403);
+            }
+
+            if ($reservation->res_statut !== 2) {
+                return response()->json(['statut' => false, 'message' => 'Réservation non confirmée.'], 400);
+            }
+
+            // Marquer tous les voyageurs comme embarqués (statut 2)
+            DB::table('fandrio_app.reservation_voyageurs')
+                ->where('res_id', $resId)
+                ->update(['res_voya_statut' => 2]);
+
+            return response()->json([
+                'statut' => true,
+                'message' => 'Voyageurs marqués comme embarqués avec succès.'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'statut' => false,
+                'message' => 'Erreur: ' . $e->getMessage()
+            ], 500);
+        }
+    }
 }

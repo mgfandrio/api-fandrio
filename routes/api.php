@@ -244,5 +244,9 @@ Route::middleware(['api.key', 'auth:api', 'role:2'])->prefix('adminCompagnie')->
         Route::get('/voyages/{voyageId}/voyageurs', [ReservationAdminController::class, 'voyageurs']);
         Route::get('/voyages/{voyageId}/billets', [ReservationAdminController::class, 'billets']);
         Route::get('/statistiques', [ReservationAdminController::class, 'statistiques']);
+        Route::get('/tableau-bord-financier', [ReservationAdminController::class, 'tableauBordFinancier']);
+        Route::get('/factures', [ReservationAdminController::class, 'factures']);
+        Route::post('/scanner-qr', [ReservationAdminController::class, 'scannerQR']);
+        Route::post('/{resId}/embarquer', [ReservationAdminController::class, 'embarquer']);
     });
 });

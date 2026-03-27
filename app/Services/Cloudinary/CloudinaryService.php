@@ -25,6 +25,14 @@ class CloudinaryService
     }
 
     /**
+     * Retourne l'instance Cloudinary
+     */
+    public function getCloudinary(): Cloudinary
+    {
+        return $this->cloudinary;
+    }
+
+    /**
      * Upload un logo de compagnie vers Cloudinary
      *
      * @param string $filePath Chemin temporaire du fichier uploadé

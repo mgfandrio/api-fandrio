@@ -181,7 +181,8 @@ class AuthentificationService
             'role' => $utilisateur->util_role,
             'compagnie_id' => $utilisateur->comp_id,
             'compagnie' => $compInfo,
-            'statut' => $utilisateur->util_statut
+            'statut' => $utilisateur->util_statut,
+            'photo' => $utilisateur->util_photo
         ];
     }
 }

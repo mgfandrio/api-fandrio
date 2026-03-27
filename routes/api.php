@@ -73,6 +73,12 @@ Route::middleware(['api.key', 'auth:api'])->group(function () {
     Route::post('/deconnexion', [AuthentificationController::class, 'deconnexion']);
     Route::get('/moi', [AuthentificationController::class, 'moi']);
 
+    // Gestion du profil utilisateur
+    Route::put('/profil', [AuthentificationController::class, 'updateProfil']);
+    Route::put('/profil/mot-de-passe', [AuthentificationController::class, 'changerMotDePasse']);
+    Route::post('/profil/photo', [AuthentificationController::class, 'uploadPhoto']);
+    Route::delete('/profil/photo', [AuthentificationController::class, 'deletePhoto']);
+
     // Note: GET /compagnies est maintenant dans le groupe public (sans JWT)
 
     // Vérification pour réservation

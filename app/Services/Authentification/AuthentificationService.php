@@ -167,6 +167,7 @@ class AuthentificationService
             $compInfo = [
                 'id' => $utilisateur->compagnie->comp_id,
                 'nom' => $utilisateur->compagnie->comp_nom,
+                'logo' => $utilisateur->compagnie->comp_logo,
                 'localisation' => $utilisateur->compagnie->localisation ? $utilisateur->compagnie->localisation->pro_nom : null
             ];
         }

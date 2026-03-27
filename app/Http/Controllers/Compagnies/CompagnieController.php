@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Compagnies;
 
 use App\Http\Controllers\Controller;
 use App\Services\Compagnies\CompagnieService;
+use App\Services\Cloudinary\CloudinaryService;
+use App\Models\Compagnies\Compagnie;
 use App\DTOs\CompagnieDTO;
 use App\DTOs\AdminCompagnieDTO;
 use Illuminate\Http\Request;
@@ -298,5 +300,132 @@ class CompagnieController extends Controller
                 'message' => $e->getMessage()
             ], 400);
         }
+    }
+
+    /**
+     * Upload ou met à jour le logo de la compagnie (pour admin compagnie)
+     * POST /api/adminCompagnie/logo
+     */
+    public function uploadLogo(Request $request): JsonResponse
+    {
+        try {
+            $compagnieId = $request->user()->comp_id;
+
+            if (!$compagnieId) {
+                return response()->json([
+                    'statut' => false,
+                    'message' => 'L\'utilisateur n\'est pas rattaché à une compagnie'
+                ], 403);
+            }
+
+            $request->validate([
+                'logo' => 'required|image|mimes:jpeg,jpg,png,webp|max:5120', // 5 Mo max
+            ]);
+
+            $compagnie = Compagnie::findOrFail($compagnieId);
+            $cloudinaryService = new CloudinaryService();
+
+            // Supprimer l'ancien logo si c'est une URL Cloudinary
+            if ($compagnie->comp_logo && str_contains($compagnie->comp_logo, 'cloudinary')) {
+                $oldPublicId = $this->extractPublicId($compagnie->comp_logo);
+                if ($oldPublicId) {
+                    $cloudinaryService->deleteLogo($oldPublicId);
+                }
+            }
+
+            // Upload vers Cloudinary
+            $result = $cloudinaryService->uploadLogo(
+                $request->file('logo')->getRealPath(),
+                $compagnieId
+            );
+
+            // Sauvegarder l'URL dans la BDD
+            $compagnie->comp_logo = $result['url'];
+            $compagnie->save();
+
+            return response()->json([
+                'statut' => true,
+                'message' => 'Logo mis à jour avec succès',
+                'data' => [
+                    'logo_url' => $result['url'],
+                ]
+            ]);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'statut' => false,
+                'message' => 'Fichier invalide',
+                'erreurs' => $e->errors()
+            ], 422);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'statut' => false,
+                'message' => 'Erreur lors de l\'upload du logo: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Supprime le logo de la compagnie
+     * DELETE /api/adminCompagnie/logo
+     */
+    public function deleteLogo(Request $request): JsonResponse
+    {
+        try {
+            $compagnieId = $request->user()->comp_id;
+
+            if (!$compagnieId) {
+                return response()->json([
+                    'statut' => false,
+                    'message' => 'L\'utilisateur n\'est pas rattaché à une compagnie'
+                ], 403);
+            }
+
+            $compagnie = Compagnie::findOrFail($compagnieId);
+
+            if (!$compagnie->comp_logo) {
+                return response()->json([
+                    'statut' => false,
+                    'message' => 'Aucun logo à supprimer'
+                ], 400);
+            }
+
+            // Supprimer de Cloudinary
+            if (str_contains($compagnie->comp_logo, 'cloudinary')) {
+                $publicId = $this->extractPublicId($compagnie->comp_logo);
+                if ($publicId) {
+                    $cloudinaryService = new CloudinaryService();
+                    $cloudinaryService->deleteLogo($publicId);
+                }
+            }
+
+            // Reset dans la BDD
+            $compagnie->comp_logo = null;
+            $compagnie->save();
+
+            return response()->json([
+                'statut' => true,
+                'message' => 'Logo supprimé avec succès'
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'statut' => false,
+                'message' => 'Erreur lors de la suppression du logo: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Extraire le public_id depuis une URL Cloudinary
+     */
+    private function extractPublicId(string $url): ?string
+    {
+        // URL format: https://res.cloudinary.com/cloud/image/upload/v123/fandrio/logos/compagnie_1.jpg
+        if (preg_match('/\/upload\/(?:v\d+\/)?(.*?)(?:\.[a-z]+)?$/', $url, $matches)) {
+            return $matches[1];
+        }
+        return null;
     }
 }

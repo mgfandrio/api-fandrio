@@ -1,66 +1,117 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# FANDRIO API
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+API back-end du projet **FANDRIO** — plateforme de réservation de taxi brousse à Madagascar.
 
-## About Laravel
+- **Framework** : Laravel 10
+- **PHP** : 8.1+
+- **Base de données** : PostgreSQL (schéma `fandrio_app`)
+- **Authentification** : JWT (`tymon/jwt-auth`)
+- **WebSockets** : Laravel Reverb
+- **Stockage d'images** : Cloudinary (`cloudinary/cloudinary_php`)
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+---
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## Installation
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+```bash
+composer install
+cp .env.example .env
+php artisan key:generate
+php artisan jwt:secret
+php artisan migrate
+```
 
-## Learning Laravel
+### Variables d'environnement requises
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+Configurer dans le fichier `.env` :
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+```dotenv
+# Base de données
+DB_CONNECTION=pgsql
+DB_HOST=127.0.0.1
+DB_PORT=5432
+DB_DATABASE=fandrio
+DB_USERNAME=...
+DB_PASSWORD=...
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+# JWT
+JWT_SECRET=...
 
-## Laravel Sponsors
+# Cloudinary (upload logos compagnies)
+CLOUDINARY_CLOUD_NAME=...
+CLOUDINARY_API_KEY=...
+CLOUDINARY_API_SECRET=...
+```
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+---
 
-### Premium Partners
+## ⚠️ Configuration SSL obligatoire — `cacert.pem` (Windows)
 
-- **[Vehikl](https://vehikl.com/)**
-- **[Tighten Co.](https://tighten.co)**
-- **[WebReinvent](https://webreinvent.com/)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel/)**
-- **[Cyber-Duck](https://cyber-duck.co.uk)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Jump24](https://jump24.co.uk)**
-- **[Redberry](https://redberry.international/laravel/)**
-- **[Active Logic](https://activelogic.com)**
-- **[byte5](https://byte5.de)**
-- **[OP.GG](https://op.gg)**
+> **IMPORTANT** : Sur Windows, PHP n'inclut pas de bundle de certificats CA par défaut.
+> Sans cette configuration, **l'upload des images vers Cloudinary échouera** avec l'erreur :
+>
+> ```
+> cURL error 60: SSL certificate problem: unable to get local issuer certificate
+> ```
 
-## Contributing
+### Étapes à suivre :
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+1. **Télécharger le bundle `cacert.pem`** depuis le site officiel de cURL :
+   👉 https://curl.se/docs/caextract.html
+   (Télécharger le fichier `cacert.pem`)
 
-## Code of Conduct
+2. **Placer le fichier** dans un répertoire accessible, par exemple :
+   ```
+   C:\php\extras\ssl\cacert.pem
+   ```
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+3. **Modifier `php.ini`** et ajouter/décommenter ces lignes :
+   ```ini
+   [curl]
+   curl.cainfo = "C:\php\extras\ssl\cacert.pem"
 
-## Security Vulnerabilities
+   [openssl]
+   openssl.cafile = "C:\php\extras\ssl\cacert.pem"
+   ```
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+4. **Redémarrer le serveur PHP** (`php artisan serve`).
 
-## License
+5. **Vérifier** que la configuration est prise en compte :
+   ```bash
+   php -i | findstr "curl.cainfo"
+   ```
+   Doit afficher le chemin vers `cacert.pem`.
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+> **Note** : Cette configuration est nécessaire pour **toute requête HTTPS** effectuée par PHP via cURL (Cloudinary, APIs externes, etc.).
+
+---
+
+## Lancer le serveur
+
+```bash
+# API
+php artisan serve --host=0.0.0.0 --port=8000
+
+# WebSockets (Reverb)
+php artisan reverb:start
+```
+
+---
+
+## Structure du projet
+
+```
+app/
+├── Http/Controllers/    # Contrôleurs API
+├── Models/              # Modèles Eloquent
+├── Services/            # Logique métier
+├── DTOs/                # Data Transfer Objects
+├── Events/              # Événements WebSocket
+├── Helpers/             # Fonctions utilitaires
+└── WebSockets/          # Configuration WebSocket
+config/
+├── cloudinary.php       # Configuration Cloudinary
+routes/
+├── api.php              # Routes API
+├── channels.php         # Canaux WebSocket
+```

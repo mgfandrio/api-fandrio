@@ -237,6 +237,10 @@ Route::middleware(['api.key', 'auth:api', 'role:2'])->prefix('adminCompagnie')->
     // Route pour la gestion des paiements de la compagnie
     Route::put('/update-paiements', [CompagnieController::class, 'updatePaiements']);
 
+    // Route pour la gestion du logo de la compagnie
+    Route::post('/logo', [CompagnieController::class, 'uploadLogo']);
+    Route::delete('/logo', [CompagnieController::class, 'deleteLogo']);
+
     // Routes pour la gestion des réservations (admin compagnie)
     Route::prefix('reservations')->group(function () {
         Route::get('/voyages', [ReservationAdminController::class, 'voyagesAvecReservations']);

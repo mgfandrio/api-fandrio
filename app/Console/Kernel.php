@@ -15,6 +15,9 @@ class Kernel extends ConsoleKernel
         // Nettoyer les locks toutes les minutes
         $schedule->command('sieges:nettoyer-locks')->everyMinute();
 
+        // Gestion automatique des statuts de voyages (toutes les 5 minutes)
+        $schedule->command('voyages:gestion-statuts')->everyFiveMinutes();
+
         // Rappels de voyage : 2 jours, 1 jour, jour J (chaque jour à 7h)
         $schedule->command('voyages:rappels')->dailyAt('07:00');
     }

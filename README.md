@@ -98,6 +98,49 @@ php artisan reverb:start
 
 ---
 
+## Tâches planifiées (Scheduler)
+
+Le projet utilise le **scheduler Laravel** pour automatiser plusieurs tâches critiques.
+
+### En développement (Windows)
+
+Lancer dans un terminal dédié :
+
+```bash
+php artisan schedule:work
+```
+
+Ce processus reste actif et exécute les tâches planifiées automatiquement.
+
+### En production (Linux)
+
+Ajouter **une seule entrée cron** sur le serveur :
+
+```cron
+* * * * * cd /chemin/vers/fandrio_api && php artisan schedule:run >> /dev/null 2>&1
+```
+
+### Tâches enregistrées
+
+| Commande                      | Fréquence         | Description                                                  |
+|-------------------------------|--------------------|--------------------------------------------------------------|
+| `sieges:nettoyer-locks`       | Chaque minute      | Libère les sièges verrouillés (expiration temporaire)        |
+| `voyages:gestion-statuts`    | Toutes les 5 min   | Met à jour automatiquement les statuts des voyages           |
+| `voyages:rappels`            | Tous les jours à 7h | Envoie les notifications de rappel aux clients               |
+
+### Détail des transitions automatiques (`voyages:gestion-statuts`)
+
+| Condition                                        | Transition                        |
+|--------------------------------------------------|-----------------------------------|
+| Places toutes réservées                          | Programmé → En cours              |
+| Date aujourd'hui + heure de départ dépassée     | Programmé → En cours              |
+| Date/heure dépassée + a des réservations        | Programmé/En cours → **Terminé**  |
+| Date/heure dépassée + aucune réservation        | Programmé → **Annulé**            |
+
+> **Important** : Sans le scheduler actif, les voyages ne changeront pas de statut automatiquement et les rappels ne seront pas envoyés.
+
+---
+
 ## Structure du projet
 
 ```

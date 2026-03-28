@@ -807,4 +807,160 @@ class ReservationAdminController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Portefeuille de la compagnie — vue financière avec commission plateforme
+     * Commission FANDRIO : 5% par billet vendu (par voyageur)
+     * GET /api/adminCompagnie/reservations/portefeuille
+     */
+    public function portefeuille(Request $request): JsonResponse
+    {
+        try {
+            $compagnieId = $this->getCompagnieId();
+            $tauxCommission = 0.05; // 5%
+
+            $voyageIds = Voyage::whereHas('trajet', fn($q) => $q->where('comp_id', $compagnieId))
+                ->pluck('voyage_id');
+
+            $reservationsBase = Reservation::whereIn('voyage_id', $voyageIds)
+                ->where('res_statut', 2);
+
+            // ── Solde global ──
+            $revenuBrut = (float)(clone $reservationsBase)->sum('montant_total');
+            $totalBillets = (int)(clone $reservationsBase)->sum('nb_voyageurs');
+            $commissionTotale = round($revenuBrut * $tauxCommission, 2);
+            $revenuNet = round($revenuBrut - $commissionTotale, 2);
+
+            // ── Solde par période ──
+            $periodes = [
+                'aujourdhui' => (clone $reservationsBase)->whereDate('created_at', today()),
+                'cette_semaine' => (clone $reservationsBase)->whereBetween('created_at', [now()->startOfWeek(), now()->endOfWeek()]),
+                'ce_mois' => (clone $reservationsBase)->whereMonth('created_at', now()->month)->whereYear('created_at', now()->year),
+                'cette_annee' => (clone $reservationsBase)->whereYear('created_at', now()->year),
+            ];
+
+            $soldeParPeriode = [];
+            foreach ($periodes as $key => $query) {
+                $brut = (float)(clone $query)->sum('montant_total');
+                $billets = (int)(clone $query)->sum('nb_voyageurs');
+                $commission = round($brut * $tauxCommission, 2);
+                $soldeParPeriode[$key] = [
+                    'brut' => $brut,
+                    'commission' => $commission,
+                    'net' => round($brut - $commission, 2),
+                    'billets' => $billets,
+                ];
+            }
+
+            // ── Évolution mensuelle (12 derniers mois) ──
+            $evolutionMensuelle = (clone $reservationsBase)
+                ->where('created_at', '>=', now()->subMonths(12))
+                ->select(
+                    DB::raw("TO_CHAR(created_at, 'YYYY-MM') as mois"),
+                    DB::raw("SUM(montant_total) as brut"),
+                    DB::raw("SUM(nb_voyageurs) as billets"),
+                    DB::raw("COUNT(*) as nb_reservations")
+                )
+                ->groupBy('mois')
+                ->orderBy('mois')
+                ->get()
+                ->map(fn($item) => [
+                    'mois' => $item->mois,
+                    'brut' => (float)$item->brut,
+                    'commission' => round((float)$item->brut * $tauxCommission, 2),
+                    'net' => round((float)$item->brut * (1 - $tauxCommission), 2),
+                    'billets' => (int)$item->billets,
+                    'nb_reservations' => (int)$item->nb_reservations,
+                ]);
+
+            // ── Répartition par opérateur ──
+            $typesPaiement = TypePaiement::pluck('type_paie_nom', 'type_paie_id');
+            $repartitionOperateur = (clone $reservationsBase)
+                ->select('type_paie_id', DB::raw('SUM(montant_total) as brut'), DB::raw('SUM(nb_voyageurs) as billets'), DB::raw('COUNT(*) as nb_transactions'))
+                ->groupBy('type_paie_id')
+                ->get()
+                ->map(fn($item) => [
+                    'operateur' => $typesPaiement[$item->type_paie_id] ?? 'Non défini',
+                    'type_id' => $item->type_paie_id,
+                    'brut' => (float)$item->brut,
+                    'commission' => round((float)$item->brut * $tauxCommission, 2),
+                    'net' => round((float)$item->brut * (1 - $tauxCommission), 2),
+                    'billets' => (int)$item->billets,
+                    'nb_transactions' => (int)$item->nb_transactions,
+                ]);
+
+            // ── Historique des transactions (paginé) ──
+            $query = Reservation::with(['utilisateur', 'voyage.trajet.provinceDepart', 'voyage.trajet.provinceArrivee'])
+                ->whereIn('voyage_id', $voyageIds)
+                ->where('res_statut', 2);
+
+            // Filtres optionnels
+            if ($request->filled('date_debut')) {
+                $query->whereDate('created_at', '>=', $request->date_debut);
+            }
+            if ($request->filled('date_fin')) {
+                $query->whereDate('created_at', '<=', $request->date_fin);
+            }
+            if ($request->filled('type_paie_id')) {
+                $query->where('type_paie_id', $request->type_paie_id);
+            }
+
+            $transactions = $query->orderBy('created_at', 'desc')
+                ->paginate($request->get('per_page', 20));
+
+            $transactionsData = $transactions->getCollection()->map(function ($res) use ($typesPaiement, $tauxCommission) {
+                $brut = (float)$res->montant_total;
+                $commission = round($brut * $tauxCommission, 2);
+                return [
+                    'res_id' => $res->res_id,
+                    'res_numero' => $res->res_numero,
+                    'date' => $res->created_at->format('d/m/Y H:i'),
+                    'date_raw' => $res->created_at->toISOString(),
+                    'client' => $res->utilisateur
+                        ? ($res->utilisateur->util_prenom . ' ' . $res->utilisateur->util_nom)
+                        : null,
+                    'trajet' => $res->voyage?->trajet
+                        ? ($res->voyage->trajet->provinceDepart->pro_nom . ' → ' . $res->voyage->trajet->provinceArrivee->pro_nom)
+                        : null,
+                    'voyage_date' => $res->voyage?->voyage_date?->format('d/m/Y'),
+                    'nb_voyageurs' => $res->nb_voyageurs,
+                    'brut' => $brut,
+                    'commission' => $commission,
+                    'net' => round($brut - $commission, 2),
+                    'operateur' => $typesPaiement[$res->type_paie_id] ?? 'Non défini',
+                    'type_paie_id' => $res->type_paie_id,
+                    'numero_paiement' => $res->numero_paiement,
+                ];
+            });
+
+            return response()->json([
+                'statut' => true,
+                'data' => [
+                    'taux_commission' => $tauxCommission * 100, // 5
+                    'solde' => [
+                        'brut' => $revenuBrut,
+                        'commission' => $commissionTotale,
+                        'net' => $revenuNet,
+                        'total_billets' => $totalBillets,
+                        'total_reservations' => (int)(clone $reservationsBase)->count(),
+                    ],
+                    'par_periode' => $soldeParPeriode,
+                    'evolution_mensuelle' => $evolutionMensuelle,
+                    'repartition_operateur' => $repartitionOperateur,
+                    'transactions' => $transactionsData,
+                    'pagination' => [
+                        'total' => $transactions->total(),
+                        'current_page' => $transactions->currentPage(),
+                        'last_page' => $transactions->lastPage(),
+                        'per_page' => $transactions->perPage(),
+                    ],
+                ]
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'statut' => false,
+                'message' => 'Erreur: ' . $e->getMessage()
+            ], 500);
+        }
+    }
 }

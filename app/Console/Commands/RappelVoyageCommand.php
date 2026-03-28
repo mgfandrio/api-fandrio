@@ -36,7 +36,9 @@ class RappelVoyageCommand extends Command
                 $voyage = $reservation->voyage;
                 $depart = $voyage->trajet->provinceDepart->pro_nom ?? 'N/A';
                 $arrivee = $voyage->trajet->provinceArrivee->pro_nom ?? 'N/A';
-                $voyageInfo = "{$depart} → {$arrivee} le {$voyage->voyage_date}";
+                $dateFormatee = $voyage->voyage_date->format('d/m/Y');
+                $heure = $voyage->voyage_heure_depart ? ' à ' . $voyage->voyage_heure_depart : '';
+                $voyageInfo = "{$depart} → {$arrivee} le {$dateFormatee}{$heure}";
 
                 // Vérifier qu'on n'a pas déjà envoyé ce rappel
                 $dejaEnvoye = \App\Models\Notifications\Notification::where('res_id', $reservation->res_id)

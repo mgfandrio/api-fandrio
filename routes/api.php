@@ -21,6 +21,8 @@ use App\Http\Controllers\Client\RechercheController;
 use App\Http\Controllers\Client\DisponibiliteController;
 use App\Http\Controllers\Voiture\SiegeController;
 use App\Http\Controllers\Voiture\PlanSiegeController;
+use App\Http\Controllers\AdminCompagnie\ReservationAdminController;
+use App\Http\Controllers\Notification\NotificationController;
 use Illuminate\Support\Facades\Route;
 
 // Routes publiques (nécessitent seulement la clé API)
@@ -71,6 +73,12 @@ Route::middleware(['api.key', 'auth:api'])->group(function () {
     Route::post('/deconnexion', [AuthentificationController::class, 'deconnexion']);
     Route::get('/moi', [AuthentificationController::class, 'moi']);
 
+    // Gestion du profil utilisateur
+    Route::put('/profil', [AuthentificationController::class, 'updateProfil']);
+    Route::put('/profil/mot-de-passe', [AuthentificationController::class, 'changerMotDePasse']);
+    Route::post('/profil/photo', [AuthentificationController::class, 'uploadPhoto']);
+    Route::delete('/profil/photo', [AuthentificationController::class, 'deletePhoto']);
+
     // Note: GET /compagnies est maintenant dans le groupe public (sans JWT)
 
     // Vérification pour réservation
@@ -102,11 +110,23 @@ Route::middleware(['api.key', 'auth:api'])->group(function () {
         Route::get('/reservation/{resId}', [VoyageurController::class, 'parReservation']);  // Voyageurs d'une réservation
     });
 
+    // Notifications (pour tous les utilisateurs authentifiés)
+    Route::prefix('notifications')->group(function () {
+        Route::get('/', [NotificationController::class, 'index']);
+        Route::get('/unread-count', [NotificationController::class, 'unreadCount']);
+        Route::patch('/{id}/read', [NotificationController::class, 'markAsRead']);
+        Route::patch('/read-all', [NotificationController::class, 'markAllAsRead']);
+        Route::post('/push-token', [NotificationController::class, 'registerPushToken']);
+        Route::delete('/push-token', [NotificationController::class, 'unregisterPushToken']);
+    });
+
     // Tableau de bord client (Statistiques et Historique)
     Route::prefix('client/reservation')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Client\ReservationController::class, 'index']);
         Route::get('/dashboard', [\App\Http\Controllers\Client\ReservationController::class, 'dashboard']);
         Route::post('/', [\App\Http\Controllers\Client\ReservationController::class, 'store']);
         Route::post('/{id}/confirm', [\App\Http\Controllers\Client\ReservationController::class, 'confirm']);
+        Route::post('/{id}/cancel', [\App\Http\Controllers\Client\ReservationController::class, 'cancel']);
         Route::get('/{id}/invoice', [\App\Http\Controllers\Client\ReservationController::class, 'getInvoice']);
     });
 });
@@ -218,5 +238,26 @@ Route::middleware(['api.key', 'auth:api', 'role:2'])->prefix('adminCompagnie')->
         Route::delete('/{id}', [PlanSiegeController::class, 'destroy']);
         Route::get('/{id}/statistiques', [PlanSiegeController::class, 'statistiques']);
         Route::get('/voiture/{voitureId}', [PlanSiegeController::class, 'obtenirParVoiture']);
+    });
+
+    // Route pour la gestion des paiements de la compagnie
+    Route::put('/update-paiements', [CompagnieController::class, 'updatePaiements']);
+
+    // Route pour la gestion du logo de la compagnie
+    Route::post('/logo', [CompagnieController::class, 'uploadLogo']);
+    Route::delete('/logo', [CompagnieController::class, 'deleteLogo']);
+
+    // Routes pour la gestion des réservations (admin compagnie)
+    Route::prefix('reservations')->group(function () {
+        Route::get('/voyages', [ReservationAdminController::class, 'voyagesAvecReservations']);
+        Route::get('/voyages/{voyageId}/plan-sieges', [ReservationAdminController::class, 'planSieges']);
+        Route::get('/voyages/{voyageId}/voyageurs', [ReservationAdminController::class, 'voyageurs']);
+        Route::get('/voyages/{voyageId}/billets', [ReservationAdminController::class, 'billets']);
+        Route::get('/statistiques', [ReservationAdminController::class, 'statistiques']);
+        Route::get('/tableau-bord-financier', [ReservationAdminController::class, 'tableauBordFinancier']);
+        Route::get('/factures', [ReservationAdminController::class, 'factures']);
+        Route::post('/scanner-qr', [ReservationAdminController::class, 'scannerQR']);
+        Route::post('/{resId}/embarquer', [ReservationAdminController::class, 'embarquer']);
+        Route::get('/portefeuille', [ReservationAdminController::class, 'portefeuille']);
     });
 });

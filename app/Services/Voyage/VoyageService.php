@@ -75,11 +75,50 @@ class VoyageService
     }
 
     /**
+     * Met à jour automatiquement les statuts des voyages d'une compagnie :
+     * - Programmé → En cours : si toutes les places sont prises OU si l'heure de départ est atteinte
+     * - Programmé/En cours → Terminé : si la date du voyage est passée
+     */
+    public static function autoCompleterVoyages(int $compagnieId): void
+    {
+        // 1. Auto-compléter : places toutes réservées → En cours (complet)
+        Voyage::whereHas('trajet', function($q) use ($compagnieId) {
+                $q->where('comp_id', $compagnieId);
+            })
+            ->where('voyage_statut', 1)
+            ->whereRaw('places_reservees >= places_disponibles')
+            ->update(['voyage_statut' => 2]);
+
+        // 2. Auto-compléter : heure de départ atteinte aujourd'hui → En cours
+        Voyage::whereHas('trajet', function($q) use ($compagnieId) {
+                $q->where('comp_id', $compagnieId);
+            })
+            ->where('voyage_statut', 1)
+            ->where('voyage_date', '=', now()->toDateString())
+            ->where('voyage_heure_depart', '<=', now()->format('H:i:s'))
+            ->update(['voyage_statut' => 2]);
+
+        // 3. Terminé : date passée pour les voyages programmés ou en cours
+        Voyage::whereHas('trajet', function($q) use ($compagnieId) {
+                $q->where('comp_id', $compagnieId);
+            })
+            ->whereIn('voyage_statut', [1, 2])
+            ->where('voyage_date', '<', now()->toDateString())
+            ->update([
+                'voyage_statut' => 3,
+                'voyage_is_active' => false
+            ]);
+    }
+
+    /**
      * Récupère la liste des voyages de la compagnie
      */
     public function listerVoyages(array $filtres = []): array 
     {
         $compagnieId = $this->getCompagnieUtilisateur();
+
+        // Mise à jour automatique des statuts
+        self::autoCompleterVoyages($compagnieId);
 
         $query = Voyage::with(['trajet.provinceDepart', 'trajet.provinceArrivee', 'voiture'])
             ->whereHas('trajet', function($q) use ($compagnieId) {

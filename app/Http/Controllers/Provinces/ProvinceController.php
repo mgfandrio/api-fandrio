@@ -231,7 +231,7 @@ class ProvinceController extends Controller
         try {
             $request->validate([
                 'province_ids' => 'required|array|min:1',
-                'province_ids.*' => 'integer|exists:fandrio_app.provinces,pro_id'
+                'province_ids.*' => 'integer|exists:provinces,pro_id'
             ]);
 
             $resultat = $this->provinceService->supprimerProvincesEnLot($request->province_ids);

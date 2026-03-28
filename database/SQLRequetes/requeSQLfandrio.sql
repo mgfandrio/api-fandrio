@@ -171,8 +171,7 @@ CREATE TABLE fandrio_app.voyages (
     places_reservees INTEGER DEFAULT 0 CHECK (places_reservees >= 0),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CHECK (places_reservees <= places_disponibles),
-    CHECK (voyage_date >= CURRENT_DATE)
+    CHECK (places_reservees <= places_disponibles)
 );
 
 -- =============================================================================
@@ -208,12 +207,12 @@ CREATE TABLE fandrio_app.reservations (
     util_id INTEGER NOT NULL REFERENCES fandrio_app.utilisateurs(util_id) ON DELETE CASCADE,
     voyage_id INTEGER NOT NULL REFERENCES fandrio_app.voyages(voyage_id) ON DELETE CASCADE,
     res_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    res_statut INTEGER DEFAULT 1 CHECK (res_statut IN (1, 2, 3, 4)), -- 1: en attente, 2: confirmée, 3: payée, 4: annulée
+    res_statut INTEGER DEFAULT 1 CHECK (res_statut IN (1, 2, 3, 4, 5)), -- 1: en attente, 2: confirmée, 3: payée, 4: annulée, 5: abandonnée
     nb_voyageurs INTEGER NOT NULL CHECK (nb_voyageurs > 0),
     montant_total DECIMAL(10,2) NOT NULL CHECK (montant_total > 0),
     montant_avance DECIMAL(10,2) DEFAULT 0 CHECK (montant_avance >= 0),
     montant_restant DECIMAL(10,2) DEFAULT 0 CHECK (montant_restant >= 0),
-    type_paie_id INTEGER NOT NULL REFERENCES fandrio_app.types_paiement(type_paie_id),
+    type_paie_id INTEGER REFERENCES fandrio_app.types_paiement(type_paie_id),
     numero_paiement VARCHAR(20), -- Numéro de téléphone si mobile money
     date_limite_paiement TIMESTAMP,
     date_annulation_possible TIMESTAMP, -- 3 jours avant le voyage

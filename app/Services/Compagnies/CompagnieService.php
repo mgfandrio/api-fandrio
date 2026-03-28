@@ -255,6 +255,19 @@ class CompagnieService
     }
 
     /**
+     * Met à jour uniquement les modes de paiement d'une compagnie
+     */
+    public function updateModesPaiement(int $compagnieId, array $modesPaiement): array
+    {
+        return DB::transaction(function () use ($compagnieId, $modesPaiement) {
+            $this->synchroniserModesPaiement($compagnieId, $modesPaiement);
+            
+            $compagnie = Compagnie::with('modesPaiement')->findOrFail($compagnieId);
+            return $this->formaterCompagnieDetaillee($compagnie);
+        });
+    }
+
+    /**
      * Active/désactive une compagnie
      */
     public function changerStatutCompagnie(int $compagnieId, int $nouveauStatut): array
@@ -315,15 +328,66 @@ class CompagnieService
     /**
      * Associe des modes de paiement à une compagnie
      */
-    private function associerModesPaiement(int $compagnieId, array $modesPaiementIds): void
+    private function associerModesPaiement(int $compagnieId, array $modesPaiement): void
     {
-        foreach ($modesPaiementIds as $modePaiementId) {
+        foreach ($modesPaiement as $mode) {
+            $id = is_array($mode) ? $mode['id'] : $mode;
+            $numero = is_array($mode) ? ($mode['numero'] ?? null) : null;
+            $titulaire = is_array($mode) ? ($mode['titulaire'] ?? null) : null;
+
+            // Validation du numéro si fourni
+            if ($numero) {
+                $this->validerNumeroPaiement($id, $numero);
+            }
+
             DB::table('fandrio_app.compagnie_paiements')->insert([
                 'comp_id' => $compagnieId,
-                'type_paie_id' => $modePaiementId,
+                'type_paie_id' => $id,
+                'comp_paie_numero' => $numero,
+                'comp_paie_titulaire' => $titulaire,
                 'comp_paie_statut' => 1,
                 'created_at' => now()
             ]);
+        }
+    }
+
+    /**
+     * Valide le préfixe du numéro de téléphone selon l'opérateur
+     */
+    private function validerNumeroPaiement(int $typeId, string $numero): void
+    {
+        // Nettoyer le numéro (enlever les espaces, etc.)
+        $numero = preg_replace('/\s+/', '', $numero);
+        
+        // On attend un format malgache (10 chiffres)
+        if (!preg_match('/^0[0-9]{9}$/', $numero)) {
+            throw new \Exception("Le format du numéro de téléphone $numero est invalide. Il doit contenir 10 chiffres commençant par 0.");
+        }
+
+        $prefix = substr($numero, 0, 3);
+        $operateur = "";
+        $prefixesAutorises = [];
+
+        switch ($typeId) {
+            case 1: // Orange Money
+                $operateur = "Orange Money";
+                $prefixesAutorises = ['032', '037'];
+                break;
+            case 2: // MVola (Telma)
+                $operateur = "MVola";
+                $prefixesAutorises = ['034', '038'];
+                break;
+            case 3: // Airtel Money
+                $operateur = "Airtel Money";
+                $prefixesAutorises = ['033'];
+                break;
+            default:
+                return; // Pas de validation de préfixe pour le cash ou autre
+        }
+
+        if (!in_array($prefix, $prefixesAutorises)) {
+            $prefixesStr = implode(' ou ', $prefixesAutorises);
+            throw new \Exception("Le numéro $numero n'est pas valide pour $operateur. Le numéro doit commencer par $prefixesStr.");
         }
     }
 
@@ -426,7 +490,9 @@ class CompagnieService
             return [
                 'id' => $modePaiement->type_paie_id,
                 'nom' => $modePaiement->type_paie_nom,
-                'type' => $modePaiement->type_paie_type
+                'type' => $modePaiement->type_paie_type,
+                'numero' => $modePaiement->pivot->comp_paie_numero,
+                'titulaire' => $modePaiement->pivot->comp_paie_titulaire
             ];
         });
 

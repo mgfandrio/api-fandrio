@@ -6,6 +6,9 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use App\Models\Provinces\Province;
 use App\Models\Utilisateurs\Utilisateur;
 use App\Models\Paiements\TypePaiement;
+use App\Models\Chauffeurs\Chauffeurs;
+use App\Models\Trajet\Trajet;
+use App\Models\Voitures\Voitures;
 use Illuminate\Database\Eloquent\Model;
 
 class Compagnie extends Model
@@ -73,7 +76,7 @@ class Compagnie extends Model
             'fandrio_app.compagnie_paiements',
             'comp_id',
             'type_paie_id'
-        )->withPivot('comp_paie_statut')
+        )->withPivot('comp_paie_statut', 'comp_paie_numero', 'comp_paie_titulaire')
          ->wherePivot('comp_paie_statut', 1);
     }
 
@@ -90,7 +93,7 @@ class Compagnie extends Model
      */
     public function voitures()
     {
-        return $this->hasMany(Voiture::class, 'comp_id', 'comp_id');
+        return $this->hasMany(Voitures::class, 'comp_id', 'comp_id');
     }
 
     /**
@@ -98,7 +101,7 @@ class Compagnie extends Model
      */
     public function chauffeurs()
     {
-        return $this->hasMany(Chauffeur::class, 'comp_id', 'comp_id');
+        return $this->hasMany(Chauffeurs::class, 'comp_id', 'comp_id');
     }
 
     /**

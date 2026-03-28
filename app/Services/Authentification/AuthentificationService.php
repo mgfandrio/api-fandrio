@@ -167,6 +167,7 @@ class AuthentificationService
             $compInfo = [
                 'id' => $utilisateur->compagnie->comp_id,
                 'nom' => $utilisateur->compagnie->comp_nom,
+                'logo' => $utilisateur->compagnie->comp_logo,
                 'localisation' => $utilisateur->compagnie->localisation ? $utilisateur->compagnie->localisation->pro_nom : null
             ];
         }
@@ -180,7 +181,8 @@ class AuthentificationService
             'role' => $utilisateur->util_role,
             'compagnie_id' => $utilisateur->comp_id,
             'compagnie' => $compInfo,
-            'statut' => $utilisateur->util_statut
+            'statut' => $utilisateur->util_statut,
+            'photo' => $utilisateur->util_photo
         ];
     }
 }

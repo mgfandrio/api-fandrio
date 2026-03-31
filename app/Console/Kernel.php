@@ -20,6 +20,9 @@ class Kernel extends ConsoleKernel
 
         // Rappels de voyage : 2 jours, 1 jour, jour J (chaque jour à 7h)
         $schedule->command('voyages:rappels')->dailyAt('07:00');
+
+        // Génération automatique des collectes de commission (chaque jour à 06:00)
+        $schedule->command('commissions:generer-collectes')->dailyAt('06:00');
     }
 
     /**

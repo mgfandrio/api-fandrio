@@ -28,12 +28,16 @@ class Compagnie extends Model
         'comp_adresse',
         'comp_logo',
         'comp_statut',
-        'comp_localisation'
+        'comp_localisation',
+        'comm_frequence_collecte',
+        'comm_jour_collecte',
+        'comm_actif'
     ];
 
     protected $casts = [
         'created_at' => 'datetime',
-        'updated_at' => 'datetime'
+        'updated_at' => 'datetime',
+        'comm_actif'  => 'boolean'
     ];
 
     /**

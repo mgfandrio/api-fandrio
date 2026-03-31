@@ -98,8 +98,9 @@ class CompagnieController extends Controller
                 'provinces_desservies' => 'sometimes|array',
                 'provinces_desservies.*' => 'integer|exists:provinces,pro_id',
                 'modes_paiement' => 'sometimes|array',
-                'modes_paiement.*' => 'integer|exists:types_paiement,type_paie_id',
                 'comp_localisation' => 'required|integer|exists:provinces,pro_id',
+                'comm_frequence_collecte' => 'sometimes|string|in:hebdomadaire,mensuelle',
+                'comm_jour_collecte' => 'sometimes|nullable|string',
                 
                 // Données admin compagnie
                 'admin_nom' => 'required|string|max:100',
@@ -174,7 +175,8 @@ class CompagnieController extends Controller
                 'provinces_desservies' => 'sometimes|array',
                 'provinces_desservies.*' => 'integer|exists:provinces,pro_id',
                 'modes_paiement' => 'sometimes|array',
-                'modes_paiement.*' => 'integer|exists:types_paiement,type_paie_id'
+                'comm_frequence_collecte' => 'sometimes|string|in:hebdomadaire,mensuelle',
+                'comm_jour_collecte' => 'sometimes|nullable|string'
             ]);
 
             $compagnieDTO = CompagnieDTO::fromRequest($request->all());

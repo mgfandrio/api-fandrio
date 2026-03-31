@@ -42,7 +42,9 @@ class CompagnieService
                 'comp_email' => $compagnieDTO->compEmail,
                 'comp_adresse' => $compagnieDTO->compAdresse,
                 'comp_localisation' => $compagnieDTO->compLocalisation,
-                'comp_statut' => 1 // Actif par défaut
+                'comp_statut' => 1, // Actif par défaut
+                'comm_frequence_collecte' => $compagnieDTO->commFrequenceCollecte ?? 'mensuelle',
+                'comm_jour_collecte' => $compagnieDTO->commJourCollecte,
             ]);
 
             // Créer l'administrateur de la compagnie
@@ -229,7 +231,7 @@ class CompagnieService
                 throw new \Exception('Une autre compagnie avec ce NIF ou email existe déjà');
             }
 
-            $compagnie->update([
+            $updateData = [
                 'comp_nom' => $compagnieDTO->compNom,
                 'comp_nif' => $compagnieDTO->compNif,
                 'comp_stat' => $compagnieDTO->compStat,
@@ -238,7 +240,17 @@ class CompagnieService
                 'comp_email' => $compagnieDTO->compEmail,
                 'comp_adresse' => $compagnieDTO->compAdresse,
                 'comp_localisation' => $compagnieDTO->compLocalisation,
-            ]);
+            ];
+
+            if ($compagnieDTO->commFrequenceCollecte) {
+                $updateData['comm_frequence_collecte'] = $compagnieDTO->commFrequenceCollecte;
+            }
+
+            if ($compagnieDTO->commJourCollecte !== null) {
+                $updateData['comm_jour_collecte'] = $compagnieDTO->commJourCollecte;
+            }
+
+            $compagnie->update($updateData);
 
             // Mettre à jour les provinces desservies
             if (isset($compagnieDTO->provincesDesservies)) {
@@ -458,6 +470,9 @@ class CompagnieService
             'adresse' => $compagnie->comp_adresse,
             'statut' => $compagnie->comp_statut,
             'logo' => $compagnie->comp_logo,
+            'frequence_collecte' => $compagnie->comm_frequence_collecte ?? 'mensuelle',
+            'jour_collecte' => $compagnie->comm_jour_collecte,
+            'commission_active' => $compagnie->comm_actif ?? true,
             'localisation' => $compagnie->localisation ? [
                 'id' => $compagnie->localisation->pro_id,
                 'nom' => $compagnie->localisation->pro_nom

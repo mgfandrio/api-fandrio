@@ -14,6 +14,7 @@ use App\Http\Controllers\Auth\AuthentificationController;
 use App\Http\Controllers\Compagnies\CompagnieController;
 use App\Http\Controllers\Provinces\ProvinceController;
 use App\Http\Controllers\Admin\UtilisateurController;
+use App\Http\Controllers\Admin\CommissionController;
 use App\Http\Controllers\Voyageur\VoyageurController;
 use App\Http\Controllers\Trajet\TrajetController;
 use App\Http\Controllers\Voyage\VoyageController;
@@ -169,6 +170,23 @@ Route::middleware(['api.key', 'auth:api', 'role:3'])->prefix('admin')->group(fun
         Route::put('/miseAjourProvince/{id}', [ProvinceController::class, 'update']);
         Route::delete('/supprimerProvince/{id}', [ProvinceController::class, 'destroy']);
         Route::delete('/supprimerPlusieursProvince', [ProvinceController::class, 'destroyMultiple']);
+    });
+
+    // Gestion des commissions
+    Route::prefix('commissions')->group(function () {
+        Route::get('/dashboard', [CommissionController::class, 'dashboard']);
+        Route::get('/compagnies', [CommissionController::class, 'listeCompagnies']);
+        Route::get('/compagnies/{compagnieId}', [CommissionController::class, 'detailCompagnie']);
+        Route::patch('/{commId}/statut', [CommissionController::class, 'confirmerReception']);
+        Route::patch('/compagnies/{compagnieId}/frequence', [CommissionController::class, 'updateFrequence']);
+        Route::patch('/compagnies/{compagnieId}/toggle', [CommissionController::class, 'toggleCommission']);
+
+        // Collectes
+        Route::get('/collectes', [CommissionController::class, 'listeCollectes']);
+        Route::get('/collectes/dues', [CommissionController::class, 'collectesDues']);
+        Route::get('/collectes/{collecteId}', [CommissionController::class, 'detailCollecte']);
+        Route::post('/collectes/{collecteId}/confirmer', [CommissionController::class, 'confirmerCollecte']);
+        Route::get('/collectes/compagnie/{compagnieId}', [CommissionController::class, 'historiqueCollectes']);
     });
 });
 

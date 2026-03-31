@@ -14,7 +14,9 @@ class CompagnieDTO
         public string $compAdresse,
         public ?int $compLocalisation = null,
         public array $provincesDesservies = [],
-        public array $modesPaiement = []
+        public array $modesPaiement = [],
+        public ?string $commFrequenceCollecte = null,
+        public ?string $commJourCollecte = null
     ) {}
 
     public static function fromRequest(array $data): self
@@ -29,7 +31,9 @@ class CompagnieDTO
             compAdresse: $data['comp_adresse'],
             compLocalisation: $data['comp_localisation'] ?? null,
             provincesDesservies: $data['provinces_desservies'] ?? [],
-            modesPaiement: $data['modes_paiement'] ?? []
+            modesPaiement: $data['modes_paiement'] ?? [],
+            commFrequenceCollecte: $data['comm_frequence_collecte'] ?? null,
+            commJourCollecte: $data['comm_jour_collecte'] ?? null
         );
     }
 }

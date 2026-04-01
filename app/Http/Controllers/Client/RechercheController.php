@@ -45,7 +45,7 @@ class RechercheController extends Controller
             $resultat = $this->rechercheService->rechercherVoyages($request->all());
 
             return response()->json([
-                'status' => 'true',
+                'statut' => true,
                 'message' => 'Recherche effectuée avec succès',
                 'data' => $resultat
             ]);

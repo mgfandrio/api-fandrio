@@ -160,6 +160,46 @@ class VoyageController extends Controller
 
 
     /**
+     * Programmer plusieurs voyages en une seule opération
+     */
+    public function storeMultiple(Request $request): JsonResponse
+    {
+        try {
+            $request->validate([
+                'voyages' => 'required|array|min:1|max:20',
+                'voyages.*.voyage_date' => 'required|date|after:today',
+                'voyages.*.voyage_heure_depart' => 'required|date_format:H:i',
+                'voyages.*.traj_id' => 'required|integer|exists:trajets,traj_id',
+                'voyages.*.voit_id' => 'required|integer|exists:voitures,voit_id',
+                'voyages.*.voyage_type' => 'sometimes|integer|in:1,2',
+                'voyages.*.places_disponibles' => 'required|integer|min:1',
+            ]);
+
+            $resultat = $this->voyageService->programmerVoyagesMultiples($request->input('voyages'));
+
+            return response()->json([
+                'statut' => true,
+                'message' => $resultat['message'],
+                'data' => $resultat
+            ], 201);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'statut' => false,
+                'message' => 'Données invalides',
+                'erreurs' => $e->errors()
+            ], 422);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'statut' => false,
+                'message' => $e->getMessage()
+            ], 400);
+        }
+    }
+
+
+    /**
      * Annule un voyage
      */
     public function annuler(int $id): JsonResponse

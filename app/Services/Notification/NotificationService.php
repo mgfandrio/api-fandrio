@@ -75,7 +75,68 @@ class NotificationService
             'res_id' => $resId,
         ]);
     }
+    /**
+     * Notifier les admins compagnie qu'un voyage est terminé et prêt pour le contrôle
+     */
+    public static function notifierVoyageTermine(int $compId, string $voyageInfo, int $nbReservations): void
+    {
+        $admins = Utilisateur::where('comp_id', $compId)
+            ->where('util_role', 2)
+            ->where('util_statut', 1)
+            ->get();
 
+        foreach ($admins as $admin) {
+            self::envoyer([
+                'type' => 9,
+                'destinataire_type' => 2,
+                'destinataire_id' => $admin->util_id,
+                'titre' => 'Voyage arrivé à échéance',
+                'message' => "Le voyage {$voyageInfo} ({$nbReservations} réservation(s)) est arrivé à échéance. Il est temps de procéder au contrôle des voyageurs.",
+            ]);
+        }
+    }
+
+    /**
+     * Notifier les admins compagnie qu'un voyage a été annulé (< 5 réservations)
+     */
+    public static function notifierVoyageAnnule(int $compId, string $voyageInfo, int $nbReservations): void
+    {
+        $admins = Utilisateur::where('comp_id', $compId)
+            ->where('util_role', 2)
+            ->where('util_statut', 1)
+            ->get();
+
+        foreach ($admins as $admin) {
+            self::envoyer([
+                'type' => 10,
+                'destinataire_type' => 2,
+                'destinataire_id' => $admin->util_id,
+                'titre' => 'Voyage annulé automatiquement',
+                'message' => "Le voyage {$voyageInfo} a été annulé car il n'a que {$nbReservations} réservation(s) (minimum requis : 5). Veuillez procéder au remboursement des clients concernés.",
+            ]);
+        }
+    }
+
+    /**
+     * Avertissement J-1 : voyage risque d'être annulé (< 5 réservations)
+     */
+    public static function notifierAvertissementAnnulation(int $compId, string $voyageInfo, int $nbReservations): void
+    {
+        $admins = Utilisateur::where('comp_id', $compId)
+            ->where('util_role', 2)
+            ->where('util_statut', 1)
+            ->get();
+
+        foreach ($admins as $admin) {
+            self::envoyer([
+                'type' => 11,
+                'destinataire_type' => 2,
+                'destinataire_id' => $admin->util_id,
+                'titre' => '⚠️ Voyage en risque d\'annulation',
+                'message' => "Le voyage {$voyageInfo} n'a que {$nbReservations} réservation(s). Si le nombre reste inférieur à 5 demain, le voyage sera automatiquement annulé et les clients devront être remboursés.",
+            ]);
+        }
+    }
     /**
      * Envoyer la push notification via Expo Push API
      */

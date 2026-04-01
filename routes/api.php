@@ -232,6 +232,7 @@ Route::middleware(['api.key', 'auth:api', 'role:2'])->prefix('adminCompagnie')->
         Route::get('/recupererListeVoyage', [VoyageController::class, 'index']);
         Route::get('/statistiques', [VoyageController::class, 'statistiques']);
         Route::post('/programmerVoyage', [VoyageController::class, 'store']);
+        Route::post('/programmerVoyagesMultiples', [VoyageController::class, 'storeMultiple']);
         Route::get('/detailVoyage/{id}', [VoyageController::class,  'show']);
         Route::put('/updateVoyage/{id}', [VoyageController::class, 'update']);
         Route::patch('/{id}/annuler', [VoyageController::class, 'annuler']);
@@ -277,5 +278,6 @@ Route::middleware(['api.key', 'auth:api', 'role:2'])->prefix('adminCompagnie')->
         Route::post('/scanner-qr', [ReservationAdminController::class, 'scannerQR']);
         Route::post('/{resId}/embarquer', [ReservationAdminController::class, 'embarquer']);
         Route::get('/portefeuille', [ReservationAdminController::class, 'portefeuille']);
+        Route::get('/ma-collecte', [ReservationAdminController::class, 'maCollecte']);
     });
 });

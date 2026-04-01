@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\Reservation\Reservation;
 use App\Models\Paiements\TypePaiement;
 use App\Models\Voyages\Voyage;
+use App\Models\Compagnies\Compagnie;
+use App\Models\Commissions\Collecte;
 use App\Services\Voiture\SiegeService;
 use App\Services\Voyage\VoyageService;
 use Illuminate\Http\JsonResponse;
@@ -955,6 +957,84 @@ class ReservationAdminController extends Controller
                         'per_page' => $transactions->perPage(),
                     ],
                 ]
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'statut' => false,
+                'message' => 'Erreur: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Informations de collecte de commission pour la compagnie
+     * GET /api/adminCompagnie/reservations/ma-collecte
+     */
+    public function maCollecte(): JsonResponse
+    {
+        try {
+            $compagnieId = $this->getCompagnieId();
+            $compagnie = Compagnie::findOrFail($compagnieId);
+
+            // Configuration de collecte
+            $config = [
+                'frequence' => $compagnie->comm_frequence_collecte ?? 'mensuelle',
+                'jour_collecte' => $compagnie->comm_jour_collecte,
+                'commission_active' => $compagnie->comm_actif ?? true,
+                'taux' => 5,
+            ];
+
+            // Prochaine collecte prévue
+            $prochaineCollecte = Collecte::where('comp_id', $compagnieId)
+                ->where('coll_statut', Collecte::EN_ATTENTE)
+                ->orderBy('coll_date_prevue')
+                ->first();
+
+            // Historique des collectes
+            $collectes = Collecte::where('comp_id', $compagnieId)
+                ->orderByDesc('coll_date_prevue')
+                ->limit(20)
+                ->get()
+                ->map(fn($c) => [
+                    'coll_id'            => $c->coll_id,
+                    'periode_debut'      => $c->coll_periode_debut->format('d/m/Y'),
+                    'periode_fin'        => $c->coll_periode_fin->format('d/m/Y'),
+                    'montant_brut'       => (float)$c->coll_montant_brut,
+                    'montant_commission' => (float)$c->coll_montant_commission,
+                    'taux'               => (float)$c->coll_taux,
+                    'nb_reservations'    => $c->coll_nb_reservations,
+                    'nb_billets'         => $c->coll_nb_billets,
+                    'statut'             => $c->coll_statut,
+                    'statut_label'       => $c->coll_statut === Collecte::CONFIRMEE ? 'Confirmée' : 'En attente',
+                    'date_prevue'        => $c->coll_date_prevue->format('d/m/Y'),
+                    'date_confirmation'  => $c->coll_date_confirmation?->format('d/m/Y H:i'),
+                ]);
+
+            // Totaux
+            $totalCollecte = Collecte::where('comp_id', $compagnieId)
+                ->where('coll_statut', Collecte::CONFIRMEE)
+                ->sum('coll_montant_commission');
+
+            $totalEnAttente = Collecte::where('comp_id', $compagnieId)
+                ->where('coll_statut', Collecte::EN_ATTENTE)
+                ->sum('coll_montant_commission');
+
+            return response()->json([
+                'statut' => true,
+                'data' => [
+                    'config' => $config,
+                    'prochaine_collecte' => $prochaineCollecte ? [
+                        'date_prevue' => $prochaineCollecte->coll_date_prevue->format('d/m/Y'),
+                        'montant' => (float)$prochaineCollecte->coll_montant_commission,
+                        'periode' => $prochaineCollecte->coll_periode_debut->format('d/m/Y') . ' → ' . $prochaineCollecte->coll_periode_fin->format('d/m/Y'),
+                    ] : null,
+                    'totaux' => [
+                        'total_collecte' => (float)$totalCollecte,
+                        'total_en_attente' => (float)$totalEnAttente,
+                        'nb_collectes' => $collectes->count(),
+                    ],
+                    'collectes' => $collectes,
+                ],
             ]);
         } catch (\Exception $e) {
             return response()->json([

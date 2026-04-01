@@ -74,6 +74,91 @@ class VoyageService
         });
     }
 
+
+    /**
+     * Programmer plusieurs voyages en une seule opération.
+     */
+    public function programmerVoyagesMultiples(array $voyagesData): array
+    {
+        return DB::transaction(function () use ($voyagesData) {
+            $compagnieId = $this->getCompagnieUtilisateur();
+
+            $voyagesCrees = [];
+            $erreurs = [];
+
+            // Pré-charger les trajets et voitures de la compagnie
+            $trajetsCompagnie = Trajet::where('comp_id', $compagnieId)->pluck('traj_id')->toArray();
+            $voituresCompagnie = Voitures::where('comp_id', $compagnieId)
+                ->where('voit_statut', 1)
+                ->get()
+                ->keyBy('voit_id');
+
+            foreach ($voyagesData as $index => $data) {
+                $numero = $index + 1;
+
+                try {
+                    $voyageDTO = VoyageDTO::fromRequest($data);
+                    $voyageDTO->validate();
+
+                    // Vérifier que le trajet appartient à la compagnie
+                    if (!in_array($voyageDTO->trajId, $trajetsCompagnie)) {
+                        throw new \Exception("Le trajet sélectionné n'appartient pas à votre compagnie");
+                    }
+
+                    // Vérifier que la voiture appartient à la compagnie
+                    $voiture = $voituresCompagnie->get($voyageDTO->voitId);
+                    if (!$voiture) {
+                        throw new \Exception("La voiture sélectionnée n'appartient pas à votre compagnie ou est inactive");
+                    }
+
+                    // Vérifier la disponibilité de la voiture
+                    if (!$voiture->estDisponiblePourDate($voyageDTO->voyageDate)) {
+                        throw new \Exception("La voiture n'est pas disponible pour la date {$voyageDTO->voyageDate}");
+                    }
+
+                    // Vérifier la capacité
+                    if ($voyageDTO->placesDisponibles > $voiture->voit_places) {
+                        throw new \Exception("Le nombre de places ({$voyageDTO->placesDisponibles}) dépasse la capacité du véhicule ({$voiture->voit_places})");
+                    }
+
+                    $voyage = Voyage::create([
+                        'voyage_date' => $voyageDTO->voyageDate,
+                        'voyage_heure_depart' => $voyageDTO->voyageHeureDepart,
+                        'voyage_type' => $voyageDTO->voyageType,
+                        'traj_id' => $voyageDTO->trajId,
+                        'voit_id' => $voyageDTO->voitId,
+                        'voyage_statut' => 1,
+                        'places_disponibles' => $voyageDTO->placesDisponibles,
+                        'places_reservees' => 0,
+                    ]);
+
+                    $voyagesCrees[] = $this->formaterVoyageComplet($voyage);
+                } catch (\Exception $e) {
+                    $erreurs[] = "Voyage #{$numero} : {$e->getMessage()}";
+                }
+            }
+
+            if (empty($voyagesCrees) && !empty($erreurs)) {
+                throw new \Exception("Aucun voyage n'a pu être créé. " . implode(' | ', $erreurs));
+            }
+
+            $total = count($voyagesData);
+            $crees = count($voyagesCrees);
+            $message = $crees === $total
+                ? "{$crees} voyage(s) programmé(s) avec succès"
+                : "{$crees}/{$total} voyage(s) programmé(s) avec succès";
+
+            return [
+                'voyages' => $voyagesCrees,
+                'total_demande' => $total,
+                'total_crees' => $crees,
+                'erreurs' => $erreurs,
+                'message' => $message,
+            ];
+        });
+    }
+
+
     /**
      * Met à jour automatiquement les statuts des voyages d'une compagnie :
      * - Programmé → En cours : si toutes les places sont prises OU si l'heure de départ est atteinte

@@ -95,14 +95,15 @@ class ReservationController extends Controller
             ];
 
             // Historique récent (2 derniers)
-            $historique = $reservations->take(2)->map(function($res) {
+            $historique = $reservations->values()->take(2)->map(function($res) {
                 return [
                     'id' => $res->res_id,
                     'numero' => $res->res_numero,
                     'trajet' => ($res->voyage && $res->voyage->trajet) ? 
                         ($res->voyage->trajet->provinceDepart->pro_nom . ' → ' . $res->voyage->trajet->provinceArrivee->pro_nom) : 'Trajet inconnu',
                     'date' => $res->voyage ? $res->voyage->voyage_date->format('d/m/Y') : 'N/A',
-                    'heure' => $res->voyage ? $res->voyage->voyage_heure : 'N/A',
+                    'heure' => $res->voyage ? $res->voyage->voyage_heure_depart : 'N/A',
+                    'date_reservation' => $res->created_at ? $res->created_at->format('d/m/Y H:i') : 'N/A',
                     'montant' => $res->montant_total,
                     'statut' => $res->res_statut, // 1: En attente, 2: Confirmé, 3: Terminé, 4: Annulé
                     'nb_voyageurs' => $res->nb_voyageurs
@@ -148,7 +149,8 @@ class ReservationController extends Controller
                         'trajet' => ($res->voyage && $res->voyage->trajet) ? 
                             ($res->voyage->trajet->provinceDepart->pro_nom . ' → ' . $res->voyage->trajet->provinceArrivee->pro_nom) : 'Trajet inconnu',
                         'date' => $res->voyage ? $res->voyage->voyage_date->format('d/m/Y') : 'N/A',
-                        'heure' => $res->voyage ? $res->voyage->voyage_heure : 'N/A',
+                        'heure' => $res->voyage ? $res->voyage->voyage_heure_depart : 'N/A',
+                        'date_reservation' => $res->created_at ? $res->created_at->format('d/m/Y H:i') : 'N/A',
                         'montant' => $res->montant_total,
                         'statut' => $res->res_statut,
                         'nb_voyageurs' => $res->nb_voyageurs

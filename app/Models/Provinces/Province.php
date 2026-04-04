@@ -12,5 +12,10 @@ class Province extends Model
     protected $table = 'fandrio_app.provinces';
     protected $primaryKey = 'pro_id';
 
-    protected $fillable = ['pro_nom', 'pro_orientation'];
+    protected $fillable = ['pro_nom', 'pro_orientation', 'pro_latitude', 'pro_longitude'];
+
+    protected $casts = [
+        'pro_latitude'  => 'float',
+        'pro_longitude' => 'float',
+    ];
 }

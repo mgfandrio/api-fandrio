@@ -19,6 +19,7 @@ use App\Http\Controllers\Voyageur\VoyageurController;
 use App\Http\Controllers\Trajet\TrajetController;
 use App\Http\Controllers\Voyage\VoyageController;
 use App\Http\Controllers\Client\RechercheController;
+use App\Http\Controllers\Client\AccueilController;
 use App\Http\Controllers\Client\DisponibiliteController;
 use App\Http\Controllers\Voiture\SiegeController;
 use App\Http\Controllers\Voiture\PlanSiegeController;
@@ -33,6 +34,9 @@ Route::middleware(['api.key'])->group(function () {
 
     // Inscription seulement pour les clients
     Route::post('/inscription', [AuthentificationController::class, 'inscription']);
+
+    // Page d'accueil intelligente (avec géolocalisation optionnelle)
+    Route::get('/accueil', [AccueilController::class, 'index']);
 
     // Routes publiques pour la recherche (accessibles sans authentification)
     Route::prefix('recherche')->group(function () {

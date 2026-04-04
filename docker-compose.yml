@@ -41,7 +41,7 @@ services:
     container_name: fandrio_postgres
     restart: unless-stopped
     ports:
-      - "${DB_PORT_FORWARD:-5432}:5432"
+      - "${DB_PORT_FORWARD:-55432}:5432"
     environment:
       POSTGRES_DB: ${DB_DATABASE:-fandrio}
       POSTGRES_USER: ${DB_USERNAME:-fandrio}

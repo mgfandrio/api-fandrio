@@ -66,7 +66,8 @@ services:
     container_name: fandrio_reverb
     restart: unless-stopped
     working_dir: /var/www
-    entrypoint: ["php", "artisan", "reverb:start", "--host=0.0.0.0", "--port=8080"]
+    entrypoint: ["entrypoint.sh"]
+    command: ["php", "artisan", "reverb:start", "--host=0.0.0.0", "--port=8080"]
     ports:
       - "${REVERB_PORT_FORWARD:-18080}:8080"
     volumes:
@@ -90,7 +91,8 @@ services:
     container_name: fandrio_scheduler
     restart: unless-stopped
     working_dir: /var/www
-    entrypoint: ["php", "artisan", "schedule:work"]
+    entrypoint: ["entrypoint.sh"]
+    command: ["php", "artisan", "schedule:work"]
     volumes:
       - .:/var/www
       - ./docker/php/php.ini:/usr/local/etc/php/conf.d/custom.ini
@@ -112,7 +114,8 @@ services:
     container_name: fandrio_voyagestatus
     restart: unless-stopped
     working_dir: /var/www
-    entrypoint: ["/bin/bash", "-c", "while true; do php artisan voyages:gestion-statuts; sleep 300; done"]
+    entrypoint: ["entrypoint.sh"]
+    command: ["/bin/bash", "-c", "while true; do php artisan voyages:gestion-statuts; sleep 300; done"]
     volumes:
       - .:/var/www
       - ./docker/php/php.ini:/usr/local/etc/php/conf.d/custom.ini

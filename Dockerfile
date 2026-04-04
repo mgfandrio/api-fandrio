@@ -55,10 +55,18 @@ RUN if [ "$INSTALL_DEV" = "true" ]; then \
         composer dump-autoload --optimize --no-dev; \
     fi
 
+# Discover packages (registers service providers like Reverb)
+RUN php artisan package:discover --ansi || true
+
 # Set permissions
 RUN chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache \
     && chmod -R 775 /var/www/storage /var/www/bootstrap/cache
 
+# Copy entrypoint script
+COPY docker/php/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
 EXPOSE 9000
 
+ENTRYPOINT ["entrypoint.sh"]
 CMD ["php-fpm"]

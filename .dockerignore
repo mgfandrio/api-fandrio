@@ -12,5 +12,6 @@ phpunit.xml
 .env
 .env.backup
 docker
+!docker/php/entrypoint.sh
 docker-compose.yml
 README.md

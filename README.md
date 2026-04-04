@@ -26,21 +26,29 @@ php artisan migrate
 Configurer dans le fichier `.env` :
 
 ```dotenv
-# Base de données
 DB_CONNECTION=pgsql
 DB_HOST=127.0.0.1
 DB_PORT=5432
 DB_DATABASE=fandrio
 DB_USERNAME=...
 DB_PASSWORD=...
-
-# JWT
 JWT_SECRET=...
-
-# Cloudinary (upload logos compagnies)
 CLOUDINARY_CLOUD_NAME=...
 CLOUDINARY_API_KEY=...
 CLOUDINARY_API_SECRET=...
+```
+
+### Lancer le serveur
+
+```bash
+# API
+php artisan serve --host=0.0.0.0 --port=8000
+
+# WebSockets (Reverb)
+php artisan reverb:start
+
+# Scheduler (terminal dédié)
+php artisan schedule:work
 ```
 
 ---
@@ -86,14 +94,92 @@ CLOUDINARY_API_SECRET=...
 
 ---
 
-## Lancer le serveur
+## Docker
+
+Le projet est entièrement dockerisé avec **Docker Compose**. La stack comprend :
+
+| Service      | Description                                       | Port par défaut |
+|--------------|---------------------------------------------------|-----------------|
+| `app`        | PHP-FPM 8.1 (Laravel)                             | 9000 (interne)  |
+| `nginx`      | Reverse proxy vers PHP-FPM                        | 8000            |
+| `postgres`   | PostgreSQL 15 avec schéma `fandrio_app`           | 5432            |
+| `reverb`     | Laravel Reverb (WebSockets)                       | 8080            |
+| `scheduler`  | Scheduler Laravel (`schedule:work`)               | —               |
+
+### Premier lancement
 
 ```bash
-# API
-php artisan serve --host=0.0.0.0 --port=8000
+# 1. Copier et configurer le .env
+cp .env.example .env
 
-# WebSockets (Reverb)
-php artisan reverb:start
+# 2. Construire et démarrer les conteneurs
+docker compose up -d --build
+
+# 3. Générer les clés (première fois uniquement)
+docker compose exec app php artisan key:generate
+docker compose exec app php artisan jwt:secret
+
+# 4. Vérifier que tout tourne
+docker compose ps
+```
+
+> Au premier démarrage, PostgreSQL exécute automatiquement les scripts SQL
+> de `database/SQLRequetes/` pour créer le schéma et les tables.
+
+### Commandes utiles
+
+```bash
+# Voir les logs
+docker compose logs -f app
+docker compose logs -f scheduler
+
+# Accéder au conteneur PHP
+docker compose exec app bash
+
+# Exécuter une commande Artisan
+docker compose exec app php artisan tinker
+docker compose exec app php artisan voyages:gestion-statuts
+
+# Reconstruire après modification du Dockerfile
+docker compose up -d --build app
+
+# Tout arrêter
+docker compose down
+
+# Tout supprimer (y compris la base de données)
+docker compose down -v
+```
+
+### Personnalisation des ports
+
+Dans le `.env` :
+
+```dotenv
+APP_PORT=8000           # Port HTTP exposé
+DB_PORT_FORWARD=5432    # Port PostgreSQL exposé
+REVERB_PORT_FORWARD=8080 # Port WebSocket exposé
+```
+
+### Note importante pour Docker
+
+Dans le `.env`, quand vous utilisez Docker, le `DB_HOST` doit pointer vers le nom du service Compose :
+
+```dotenv
+DB_HOST=postgres
+```
+
+Les services `reverb` et `scheduler` utilisent la même image que `app` et partagent le même code source via un volume monté.
+
+---
+
+## Installation locale (sans Docker)
+
+```bash
+composer install
+cp .env.example .env
+php artisan key:generate
+php artisan jwt:secret
+php artisan migrate
 ```
 
 ---
@@ -154,6 +240,10 @@ app/
 └── WebSockets/          # Configuration WebSocket
 config/
 ├── cloudinary.php       # Configuration Cloudinary
+docker/
+├── nginx/default.conf   # Configuration Nginx
+├── php/php.ini          # Configuration PHP
+└── postgres/init/       # Scripts d'initialisation DB
 routes/
 ├── api.php              # Routes API
 ├── channels.php         # Canaux WebSocket

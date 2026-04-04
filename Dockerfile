@@ -59,9 +59,6 @@ RUN if [ "$INSTALL_DEV" = "true" ]; then \
 RUN chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache \
     && chmod -R 775 /var/www/storage /var/www/bootstrap/cache
 
-# PHP config
-COPY docker/php/php.ini /usr/local/etc/php/conf.d/custom.ini
-
 EXPOSE 9000
 
 CMD ["php-fpm"]

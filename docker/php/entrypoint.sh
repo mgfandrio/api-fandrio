@@ -4,7 +4,7 @@ set -e
 cd /var/www
 
 # Install dependencies if vendor directory is missing or incomplete
-if [ ! -f "vendor/autoload.php" ]; then
+if [ ! -f "vendor/autoload.php" ] || [ ! -d "vendor/laravel/reverb" ]; then
     echo "=== FANDRIO: Installing Composer dependencies... ==="
     composer install --no-interaction --optimize-autoloader
 fi

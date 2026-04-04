@@ -12,6 +12,8 @@ services:
       - ./docker/php/php.ini:/usr/local/etc/php/conf.d/custom.ini
     environment:
       - DB_HOST=postgres
+      - DB_PORT=5432
+      - REVERB_HOST=reverb
     depends_on:
       postgres:
         condition: service_healthy
@@ -72,6 +74,8 @@ services:
       - ./docker/php/php.ini:/usr/local/etc/php/conf.d/custom.ini
     environment:
       - DB_HOST=postgres
+      - DB_PORT=5432
+      - REVERB_HOST=reverb
     depends_on:
       postgres:
         condition: service_healthy
@@ -92,6 +96,8 @@ services:
       - ./docker/php/php.ini:/usr/local/etc/php/conf.d/custom.ini
     environment:
       - DB_HOST=postgres
+      - DB_PORT=5432
+      - REVERB_HOST=reverb
     depends_on:
       postgres:
         condition: service_healthy
@@ -112,6 +118,8 @@ services:
       - ./docker/php/php.ini:/usr/local/etc/php/conf.d/custom.ini
     environment:
       - DB_HOST=postgres
+      - DB_PORT=5432
+      - REVERB_HOST=reverb
     depends_on:
       postgres:
         condition: service_healthy

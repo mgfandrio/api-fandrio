@@ -615,7 +615,7 @@ class ReservationAdminController extends Controller
                     'date_raw' => $res->created_at->toISOString(),
                     'client' => $res->utilisateur ? [
                         'nom' => $res->utilisateur->util_prenom . ' ' . $res->utilisateur->util_nom,
-                        'telephone' => $res->utilisateur->util_telephone,
+                        'telephone' => $res->utilisateur->util_phone,
                     ] : null,
                     'trajet' => $res->voyage?->trajet ? ($res->voyage->trajet->provinceDepart->pro_nom . ' → ' . $res->voyage->trajet->provinceArrivee->pro_nom) : null,
                     'voyage_date' => $res->voyage?->voyage_date?->format('d/m/Y'),

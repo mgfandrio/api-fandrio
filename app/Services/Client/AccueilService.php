@@ -152,7 +152,7 @@ class AccueilService
         $query = Voyage::with([
             'trajet.provinceDepart',
             'trajet.provinceArrivee',
-            'trajet.compagnie',
+            'trajet.compagnie.modesPaiement',
             'voiture'
         ])
             ->where('voyage_statut', 1)
@@ -226,6 +226,15 @@ class AccueilService
                 'id'   => $compagnie->comp_id,
                 'nom'  => $compagnie->comp_nom,
                 'logo' => $compagnie->comp_logo,
+                'modes_paiement' => $compagnie->modesPaiement->map(function($mode) {
+                    return [
+                        'type_paie_id' => $mode->type_paie_id,
+                        'nom_paie' => $mode->type_paie_nom,
+                        'type_paie' => $mode->type_paie_type == 1 ? 'mobile_money' : 'cash',
+                        'numero' => $mode->pivot->comp_paie_numero ?? null,
+                        'titulaire' => $mode->pivot->comp_paie_titulaire ?? null,
+                    ];
+                }),
             ],
             'voiture' => $voiture ? [
                 'matricule' => $voiture->voit_matricule,

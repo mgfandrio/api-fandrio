@@ -28,7 +28,7 @@ class RechercheService
         $query = Voyage::with([
             'trajet.provinceDepart',
             'trajet.provinceArrivee',
-            'trajet.compagnie',
+            'trajet.compagnie.modesPaiement',
             'voiture'
         ])
         ->where('voyage_statut', 1) // Seulement les voyages programmés (actif)
@@ -154,7 +154,7 @@ class RechercheService
         $voyage = Voyage::with([
             'trajet.provinceDepart',
             'trajet.provinceArrivee',
-            'trajet.compagnie',
+            'trajet.compagnie.modesPaiement',
             'voiture',
             'voiture.chauffeur'
         ])
@@ -183,7 +183,7 @@ class RechercheService
         $query = Voyage::with([
             'trajet.provinceDepart',
             'trajet.provinceArrivee',
-            'trajet.compagnie'
+            'trajet.compagnie.modesPaiement'
         ])
         ->where('voyage_statut', 1)
         ->whereHas('trajet', function($q) use ($provinceArriveeId) {

@@ -345,7 +345,8 @@ CREATE TABLE fandrio_app.notifications (
     notif_date_envoi TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     notif_statut INTEGER DEFAULT 1 CHECK (notif_statut IN (1, 2, 3)), -- 1: en attente, 2: envoyée, 3: lue
     res_id INTEGER REFERENCES fandrio_app.reservations(res_id) ON DELETE SET NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 COMMENT ON TABLE fandrio_app.notifications IS 'Table des notifications système';
@@ -523,6 +524,7 @@ CREATE TRIGGER update_voitures_updated_at BEFORE UPDATE ON fandrio_app.voitures 
 CREATE TRIGGER update_trajets_updated_at BEFORE UPDATE ON fandrio_app.trajets FOR EACH ROW EXECUTE FUNCTION fandrio_app.update_updated_at_column();
 CREATE TRIGGER update_voyages_updated_at BEFORE UPDATE ON fandrio_app.voyages FOR EACH ROW EXECUTE FUNCTION fandrio_app.update_updated_at_column();
 CREATE TRIGGER update_reservations_updated_at BEFORE UPDATE ON fandrio_app.reservations FOR EACH ROW EXECUTE FUNCTION fandrio_app.update_updated_at_column();
+CREATE TRIGGER update_notifications_updated_at BEFORE UPDATE ON fandrio_app.notifications FOR EACH ROW EXECUTE FUNCTION fandrio_app.update_updated_at_column();
 CREATE TRIGGER update_collectes_updated_at BEFORE UPDATE ON fandrio_app.collectes FOR EACH ROW EXECUTE FUNCTION fandrio_app.update_updated_at_column();
 CREATE TRIGGER update_audit_places_updated_at BEFORE UPDATE ON fandrio_app.audit_places FOR EACH ROW EXECUTE FUNCTION fandrio_app.update_updated_at_column();
 CREATE TRIGGER update_plan_sieges_updated_at BEFORE UPDATE ON fandrio_app.plan_sieges FOR EACH ROW EXECUTE FUNCTION fandrio_app.update_updated_at_column();

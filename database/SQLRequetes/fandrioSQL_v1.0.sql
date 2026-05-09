@@ -100,11 +100,13 @@ CREATE TABLE fandrio_app.utilisateurs (
     util_password VARCHAR(255) NOT NULL,
     util_statut INTEGER DEFAULT 1 CHECK (util_statut IN (1, 2, 3)), -- 1: actif, 2: inactif, 3: supprimé
     comp_id INTEGER REFERENCES fandrio_app.compagnies(comp_id) ON DELETE SET NULL,
+    push_token VARCHAR(255) NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 COMMENT ON TABLE fandrio_app.utilisateurs IS 'Table des utilisateurs de l''application (clients, admins compagnies, admin système)';
+COMMENT ON COLUMN fandrio_app.utilisateurs.push_token IS 'Token Expo Push notification (ExponentPushToken[...])';
 
 
 -- =============================================================================
@@ -453,6 +455,7 @@ CREATE INDEX idx_compagnies_localisation ON fandrio_app.compagnies(comp_localisa
 -- Utilisateurs
 CREATE INDEX idx_utilisateurs_email ON fandrio_app.utilisateurs(util_email);
 CREATE INDEX idx_utilisateurs_role ON fandrio_app.utilisateurs(util_role);
+CREATE INDEX idx_utilisateurs_push_token ON fandrio_app.utilisateurs(push_token) WHERE push_token IS NOT NULL;
 
 -- Réservations
 CREATE INDEX idx_reservations_numero ON fandrio_app.reservations(res_numero);

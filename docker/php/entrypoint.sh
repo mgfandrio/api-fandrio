@@ -15,7 +15,8 @@ php artisan package:discover --ansi 2>/dev/null || true
 # Generate app key if not set
 php artisan key:generate --no-interaction 2>/dev/null || true
 
-# Cache config
+# Clear any stale compiled config (so .env values are re-read)
+rm -f /var/www/bootstrap/cache/config.php 2>/dev/null || true
 php artisan config:clear 2>/dev/null || true
 
 # Set permissions

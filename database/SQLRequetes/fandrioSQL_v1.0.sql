@@ -213,6 +213,10 @@ CREATE TABLE fandrio_app.voyages (
     voit_id INTEGER NOT NULL REFERENCES fandrio_app.voitures(voit_id),
     voyage_statut INTEGER DEFAULT 1 CHECK (voyage_statut IN (1, 2, 3, 4)), -- 1: programmé, 2: en cours, 3: terminé, 4: annulé
     voyage_is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    -- Invariant : un voyage ne peut être actif (ouvert aux réservations) que s'il est
+    -- programmé ou en cours. Terminé ou annulé ⇒ forcément is_active=false.
+    CONSTRAINT voyages_active_statut_invariant
+        CHECK (voyage_is_active = false OR voyage_statut IN (1, 2)),
     places_disponibles INTEGER NOT NULL,
     places_reservees INTEGER DEFAULT 0 CHECK (places_reservees >= 0),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -264,7 +268,7 @@ CREATE TABLE fandrio_app.reservations (
     util_id INTEGER NOT NULL REFERENCES fandrio_app.utilisateurs(util_id) ON DELETE CASCADE,
     voyage_id INTEGER NOT NULL REFERENCES fandrio_app.voyages(voyage_id) ON DELETE CASCADE,
     res_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    res_statut INTEGER DEFAULT 1 CHECK (res_statut IN (1, 2, 3, 4, 5)), -- 1: en attente, 2: confirmée, 3: payée, 4: annulée, 5: abandonnée
+    res_statut INTEGER DEFAULT 1 CHECK (res_statut IN (1, 2, 4, 5)), -- 1: en attente, 2: confirmée (payée), 4: annulée, 5: abandonnée
     nb_voyageurs INTEGER NOT NULL CHECK (nb_voyageurs > 0),
     montant_total DECIMAL(10,2) NOT NULL CHECK (montant_total > 0),
     montant_avance DECIMAL(10,2) DEFAULT 0 CHECK (montant_avance >= 0),
@@ -337,7 +341,16 @@ CREATE TABLE fandrio_app.factures (
 -- =============================================================================
 CREATE TABLE fandrio_app.notifications (
     notif_id SERIAL PRIMARY KEY,
-    notif_type INTEGER NOT NULL CHECK (notif_type IN (1, 2, 3, 4)), -- 1: confirmation, 2: rappel, 3: annulation, 4: nouvelle réservation
+    notif_type INTEGER NOT NULL CHECK (notif_type IN (1, 2, 3, 4, 8, 9, 10, 11, 12)),
+    -- 1: confirmation réservation client
+    -- 2: rappel voyage (J-1, J-0)
+    -- 3: annulation
+    -- 4: nouvelle réservation (admin compagnie)
+    -- 8: commission/collecte (admin compagnie)
+    -- 9: voyage arrivé à échéance (admin compagnie)
+    -- 10: voyage annulé automatiquement < 5 réservations (admin compagnie)
+    -- 11: avertissement risque d'annulation J-1 (admin compagnie)
+    -- 12: paiement validé par la compagnie (client)
     notif_destinataire_type INTEGER NOT NULL CHECK (notif_destinataire_type IN (1, 2, 3)), -- 1: utilisateur, 2: compagnie, 3: admin
     notif_destinataire_id INTEGER NOT NULL,
     notif_titre VARCHAR(200) NOT NULL,
@@ -434,7 +447,7 @@ CREATE TABLE fandrio_app.sieges_reserves (
     voyage_id INTEGER NOT NULL REFERENCES fandrio_app.voyages(voyage_id),
     siege_numero VARCHAR(10) NOT NULL, -- Ex: "A1", "B3", "C12"
     res_id INTEGER REFERENCES fandrio_app.reservations(res_id) ON DELETE SET NULL,
-    siege_statut INTEGER DEFAULT 1, -- 1: réservé, 2: disponible, 3: sélectionné temporairement
+    siege_statut INTEGER DEFAULT 1 CHECK (siege_statut IN (1, 2, 3)), -- 1: réservé, 2: disponible, 3: sélectionné temporairement
     utilisateur_id INTEGER,
     expire_lock TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -571,25 +584,63 @@ CREATE TRIGGER trigger_generate_facture_number
 
 CREATE OR REPLACE FUNCTION fandrio_app.update_places_voyage()
 RETURNS TRIGGER AS $$
+DECLARE
+    statuts_actifs INTEGER[] := ARRAY[1, 2]; -- 1: en attente (lock sièges), 2: confirmée (payée)
+    old_actif BOOLEAN;
+    new_actif BOOLEAN;
 BEGIN
+    -- INSERT : compter uniquement si statut actif
     IF TG_OP = 'INSERT' THEN
-        UPDATE fandrio_app.voyages
-        SET places_reservees = places_reservees + NEW.nb_voyageurs
-        WHERE voyage_id = NEW.voyage_id;
-        RETURN NEW;
-    ELSIF TG_OP = 'UPDATE' THEN
-        IF OLD.res_statut != NEW.res_statut THEN
-            IF NEW.res_statut = 4 THEN -- Annulation
-                UPDATE fandrio_app.voyages
-                SET places_reservees = places_reservees - NEW.nb_voyageurs
-                WHERE voyage_id = NEW.voyage_id;
-            END IF;
+        IF NEW.res_statut = ANY(statuts_actifs) THEN
+            UPDATE fandrio_app.voyages
+            SET places_reservees = places_reservees + NEW.nb_voyageurs
+            WHERE voyage_id = NEW.voyage_id;
         END IF;
         RETURN NEW;
+
+    -- UPDATE : gérer transitions de statut, changements de nb_voyageurs, transferts
+    ELSIF TG_OP = 'UPDATE' THEN
+        old_actif := OLD.res_statut = ANY(statuts_actifs);
+        new_actif := NEW.res_statut = ANY(statuts_actifs);
+
+        -- Transfert vers un autre voyage
+        IF OLD.voyage_id != NEW.voyage_id THEN
+            IF old_actif THEN
+                UPDATE fandrio_app.voyages
+                SET places_reservees = GREATEST(0, places_reservees - OLD.nb_voyageurs)
+                WHERE voyage_id = OLD.voyage_id;
+            END IF;
+            IF new_actif THEN
+                UPDATE fandrio_app.voyages
+                SET places_reservees = places_reservees + NEW.nb_voyageurs
+                WHERE voyage_id = NEW.voyage_id;
+            END IF;
+            RETURN NEW;
+        END IF;
+
+        -- Même voyage
+        IF old_actif AND NOT new_actif THEN
+            UPDATE fandrio_app.voyages
+            SET places_reservees = GREATEST(0, places_reservees - OLD.nb_voyageurs)
+            WHERE voyage_id = NEW.voyage_id;
+        ELSIF NOT old_actif AND new_actif THEN
+            UPDATE fandrio_app.voyages
+            SET places_reservees = places_reservees + NEW.nb_voyageurs
+            WHERE voyage_id = NEW.voyage_id;
+        ELSIF old_actif AND new_actif AND OLD.nb_voyageurs != NEW.nb_voyageurs THEN
+            UPDATE fandrio_app.voyages
+            SET places_reservees = GREATEST(0, places_reservees + (NEW.nb_voyageurs - OLD.nb_voyageurs))
+            WHERE voyage_id = NEW.voyage_id;
+        END IF;
+        RETURN NEW;
+
+    -- DELETE : décrémenter uniquement si la réservation était active
     ELSIF TG_OP = 'DELETE' THEN
-        UPDATE fandrio_app.voyages
-        SET places_reservees = places_reservees - OLD.nb_voyageurs
-        WHERE voyage_id = OLD.voyage_id;
+        IF OLD.res_statut = ANY(statuts_actifs) THEN
+            UPDATE fandrio_app.voyages
+            SET places_reservees = GREATEST(0, places_reservees - OLD.nb_voyageurs)
+            WHERE voyage_id = OLD.voyage_id;
+        END IF;
         RETURN OLD;
     END IF;
     RETURN NULL;

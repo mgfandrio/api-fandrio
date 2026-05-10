@@ -240,4 +240,69 @@ class VoyageController extends Controller
             ], 400);
         }
     }
+
+    /**
+     * Bascule la visibilité d'un voyage (mise en pause / reprise des réservations).
+     * PATCH /api/voyages/{id}/toggler-activation
+     */
+    public function togglerActivation(int $id): JsonResponse
+    {
+        try {
+            $voyage = $this->voyageService->togglerActivationVoyage($id);
+
+            $message = $voyage['is_active']
+                ? 'Voyage rouvert aux réservations'
+                : 'Voyage mis en pause (caché de la recherche client)';
+
+            return response()->json([
+                'statut' => true,
+                'message' => $message,
+                'data' => $voyage,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'statut' => false,
+                'message' => $e->getMessage()
+            ], 400);
+        }
+    }
+
+    /**
+     * Reprogramme un voyage existant en créant un nouveau voyage cloné à une autre date.
+     * Le voyage source est inchangé (historique préservé).
+     * POST /api/voyages/{id}/reprogrammer
+     * Body : { voyage_date (req), voyage_heure_depart?, voit_id?, places_disponibles? }
+     */
+    public function reprogrammer(Request $request, int $id): JsonResponse
+    {
+        try {
+            $request->validate([
+                'voyage_date' => 'required|date|after_or_equal:today',
+                'voyage_heure_depart' => 'nullable|string',
+                'voit_id' => 'nullable|integer|exists:fandrio_app.voitures,voit_id',
+                'places_disponibles' => 'nullable|integer|min:1',
+            ]);
+
+            $resultat = $this->voyageService->reprogrammerVoyage($id, $request->only([
+                'voyage_date', 'voyage_heure_depart', 'voit_id', 'places_disponibles',
+            ]));
+
+            return response()->json([
+                'statut' => true,
+                'message' => 'Voyage reprogrammé avec succès',
+                'data' => $resultat,
+            ], 201);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'statut' => false,
+                'message' => 'Données invalides',
+                'erreurs' => $e->errors(),
+            ], 422);
+        } catch (\Exception $e) {
+            return response()->json([
+                'statut' => false,
+                'message' => $e->getMessage()
+            ], 400);
+        }
+    }
 }

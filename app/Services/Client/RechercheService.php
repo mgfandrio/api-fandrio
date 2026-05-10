@@ -31,7 +31,8 @@ class RechercheService
             'trajet.compagnie.modesPaiement',
             'voiture'
         ])
-        ->where('voyage_statut', 1) // Seulement les voyages programmés (actif)
+        ->where('voyage_statut', 1) // Programmé
+        ->where('voyage_is_active', true) // Ouvert aux réservations (non mis en pause)
         ->where('voyage_date', '>=', now()->toDateString()) // Voyages à venir
         ->whereRaw('places_disponibles > places_reservees') // Places disponibles
         ->join('fandrio_app.trajets as t', 'voyages.traj_id', '=', 't.traj_id')

@@ -118,6 +118,23 @@ class NotificationService
     }
 
     /**
+     * Notifier un client que son voyage réservé a été annulé par la compagnie
+     * (annulation manuelle ou automatique). La réservation est aussi passée à statut 4
+     * et un remboursement sera effectué par la compagnie.
+     */
+    public static function notifierClientVoyageAnnule(int $utilId, int $resId, string $voyageInfo): void
+    {
+        self::envoyer([
+            'type' => 3, // annulation
+            'destinataire_type' => 1, // utilisateur
+            'destinataire_id' => $utilId,
+            'titre' => 'Voyage annulé',
+            'message' => "Votre voyage {$voyageInfo} a été annulé par la compagnie. Un remboursement sera effectué prochainement.",
+            'res_id' => $resId,
+        ]);
+    }
+
+    /**
      * Avertissement J-1 : voyage risque d'être annulé (< 5 réservations)
      */
     public static function notifierAvertissementAnnulation(int $compId, string $voyageInfo, int $nbReservations): void

@@ -87,11 +87,17 @@ class ReservationController extends Controller
             // Filtrer pour exclure les abandons (statut 5) des statistiques et de l'historique
             $reservations = $reservationsFull->whereIn('res_statut', [1, 2, 3, 4]);
 
-            // Calcul des statistiques
+            // Calcul des statistiques (sémantique côté RÉSERVATION, pas voyage)
+            //  - total_reservations  : réservations confirmées + annulées (exclut "en attente")
+            //  - reservations_confirmees : réservations confirmées (res_statut=2), en attente d'embarquement
+            //  - reservations_annulees   : réservations annulées par l'utilisateur ou la compagnie
             $stats = [
-                'total_reservations' => $reservations->whereIn('res_statut', [2, 3, 4])->count(),
-                'voyages_en_cours' => $reservations->where('res_statut', 2)->count(),
-                'voyages_annules' => $reservations->where('res_statut', 4)->count(),
+                'total_reservations'      => $reservations->whereIn('res_statut', [2, 4])->count(),
+                'reservations_confirmees' => $reservations->where('res_statut', 2)->count(),
+                'reservations_annulees'   => $reservations->where('res_statut', 4)->count(),
+                // Alias rétrocompatibilité (à retirer une fois le frontend migré)
+                'voyages_en_cours'        => $reservations->where('res_statut', 2)->count(),
+                'voyages_annules'         => $reservations->where('res_statut', 4)->count(),
             ];
 
             // Historique récent (2 derniers)
@@ -105,7 +111,8 @@ class ReservationController extends Controller
                     'heure' => $res->voyage ? $res->voyage->voyage_heure_depart : 'N/A',
                     'date_reservation' => $res->created_at ? $res->created_at->format('d/m/Y H:i') : 'N/A',
                     'montant' => $res->montant_total,
-                    'statut' => $res->res_statut, // 1: En attente, 2: Confirmé, 3: Terminé, 4: Annulé
+                    // res_statut : 1=En attente, 2=Confirmée (payée), 4=Annulée, 5=Abandonnée (filtrée)
+                    'statut' => $res->res_statut,
                     'nb_voyageurs' => $res->nb_voyageurs
                 ];
             });
@@ -362,8 +369,9 @@ class ReservationController extends Controller
                     ))->toOthers();
                 }
 
-                // Incrémenter les places réservées dans le voyage
-                Voyage::where('voyage_id', $reservation->voyage_id)->increment('places_reservees', $reservation->nb_voyageurs);
+                // NOTE : ne PAS incrémenter places_reservees ici.
+                // Le trigger SQL trigger_update_places_voyage l'a déjà fait à la création (INSERT)
+                // de la réservation dans store(). L'incrémenter ici causerait un double comptage.
             });
 
             // Notifier l'admin compagnie

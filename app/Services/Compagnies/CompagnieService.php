@@ -146,19 +146,28 @@ class CompagnieService
 
         $voituresTotal = $voituresDisponibles + $voituresIndisponibles;
 
-        // Statistiques des voyages
+        // Statistiques des voyages (sémantique sur 2 axes : statut + is_active)
+        //  - voyages_ouverts  : statut IN (1,2) ET is_active=true  (réservables par les clients)
+        //  - voyages_en_pause : statut IN (1,2) ET is_active=false (cachés temporairement)
+        //  - voyages_termines : statut = 3
+        //  - voyages_annules  : statut = 4
         $trajetsIds = Trajet::where('comp_id', $compagnieId)->pluck('traj_id');
 
-        $voyagesActifs = DB::table('fandrio_app.voyages')
+        $voyagesOuverts = DB::table('fandrio_app.voyages')
             ->whereIn('traj_id', $trajetsIds)
+            ->whereIn('voyage_statut', [1, 2])
             ->where('voyage_is_active', true)
-            ->where('voyage_statut', '!=', 4)
             ->count();
 
-        $voyagesInactifs = DB::table('fandrio_app.voyages')
+        $voyagesEnPause = DB::table('fandrio_app.voyages')
             ->whereIn('traj_id', $trajetsIds)
+            ->whereIn('voyage_statut', [1, 2])
             ->where('voyage_is_active', false)
-            ->where('voyage_statut', '!=', 4)
+            ->count();
+
+        $voyagesTermines = DB::table('fandrio_app.voyages')
+            ->whereIn('traj_id', $trajetsIds)
+            ->where('voyage_statut', 3)
             ->count();
 
         $voyagesAnnules = DB::table('fandrio_app.voyages')
@@ -166,7 +175,11 @@ class CompagnieService
             ->where('voyage_statut', 4)
             ->count();
 
-        $voyagesTotal = $voyagesActifs + $voyagesInactifs + $voyagesAnnules;
+        // Alias rétrocompatibilité (à retirer une fois le frontend migré)
+        $voyagesActifs = $voyagesOuverts;
+        $voyagesInactifs = $voyagesEnPause + $voyagesTermines;
+
+        $voyagesTotal = $voyagesOuverts + $voyagesEnPause + $voyagesTermines + $voyagesAnnules;
 
         // Statistiques des chauffeurs
         // Statut: 1 = Actif, 2 = Inactif, 3 = Supprimé
@@ -189,10 +202,15 @@ class CompagnieService
                 'total' => $voituresTotal
             ],
             'voyages' => [
-                'actifs' => $voyagesActifs,
-                'inactifs' => $voyagesInactifs,
-                'annules' => $voyagesAnnules,
-                'total' => $voyagesTotal
+                // Nouvelles clés (sémantique claire)
+                'ouverts'   => $voyagesOuverts,
+                'en_pause'  => $voyagesEnPause,
+                'termines'  => $voyagesTermines,
+                'annules'   => $voyagesAnnules,
+                'total'     => $voyagesTotal,
+                // Alias rétrocompatibilité (à retirer une fois le frontend migré)
+                'actifs'    => $voyagesActifs,
+                'inactifs'  => $voyagesInactifs,
             ],
             'chauffeurs' => [
                 'actifs' => $chauffeurActifs,

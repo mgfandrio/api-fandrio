@@ -17,6 +17,14 @@ use Illuminate\Support\Facades\DB;
 
 class ReservationAdminController extends Controller
 {
+    /**
+     * Statut de réservation considéré comme « validé » pour la compagnie :
+     *  2 = confirmée (l'utilisateur a saisi son code de paiement)
+     * Le workflow est entièrement automatisé côté client : pas de validation manuelle
+     * du paiement par l'admin compagnie.
+     */
+    private const STATUTS_VALIDES = [2];
+
     public function __construct(private SiegeService $siegeService) {}
 
     /**
@@ -49,16 +57,16 @@ class ReservationAdminController extends Controller
                 $q->where('comp_id', $compagnieId);
             })
             ->whereHas('reservations', function ($q) {
-                $q->where('res_statut', 2);
+                $q->whereIn('res_statut', self::STATUTS_VALIDES);
             })
             ->withCount(['reservations as reservations_validees_count' => function ($q) {
-                $q->where('res_statut', 2);
+                $q->whereIn('res_statut', self::STATUTS_VALIDES);
             }])
             ->withSum(['reservations as total_voyageurs' => function ($q) {
-                $q->where('res_statut', 2);
+                $q->whereIn('res_statut', self::STATUTS_VALIDES);
             }], 'nb_voyageurs')
             ->withSum(['reservations as revenu_total' => function ($q) {
-                $q->where('res_statut', 2);
+                $q->whereIn('res_statut', self::STATUTS_VALIDES);
             }], 'montant_total')
             ->orderBy('voyage_date', 'desc')
             ->orderBy('voyage_heure_depart', 'desc');
@@ -73,18 +81,18 @@ class ReservationAdminController extends Controller
             $allVoyagesQuery = Voyage::whereHas('trajet', function ($q) use ($compagnieId) {
                 $q->where('comp_id', $compagnieId);
             })->whereHas('reservations', function ($q) {
-                $q->where('res_statut', 2);
+                $q->whereIn('res_statut', self::STATUTS_VALIDES);
             });
 
             $totalRevenu = Reservation::whereIn('voyage_id',
                 Voyage::whereHas('trajet', fn($q) => $q->where('comp_id', $compagnieId))
                     ->pluck('voyage_id')
-            )->where('res_statut', 2)->sum('montant_total');
+            )->whereIn('res_statut', self::STATUTS_VALIDES)->sum('montant_total');
 
             $totalReservations = Reservation::whereIn('voyage_id',
                 Voyage::whereHas('trajet', fn($q) => $q->where('comp_id', $compagnieId))
                     ->pluck('voyage_id')
-            )->where('res_statut', 2)->count();
+            )->whereIn('res_statut', self::STATUTS_VALIDES)->count();
 
             $data = [
                 'resume' => [
@@ -181,7 +189,7 @@ class ReservationAdminController extends Controller
 
             $reservations = Reservation::with(['voyageurs', 'utilisateur'])
                 ->where('voyage_id', $voyageId)
-                ->where('res_statut', 2)
+                ->whereIn('res_statut', self::STATUTS_VALIDES)
                 ->orderBy('created_at', 'asc')
                 ->get();
 
@@ -245,7 +253,7 @@ class ReservationAdminController extends Controller
 
             $reservations = Reservation::with(['utilisateur', 'voyageurs'])
                 ->where('voyage_id', $voyageId)
-                ->where('res_statut', 2)
+                ->whereIn('res_statut', self::STATUTS_VALIDES)
                 ->orderBy('created_at', 'desc')
                 ->get();
 
@@ -330,9 +338,9 @@ class ReservationAdminController extends Controller
             $voyageIds = Voyage::whereHas('trajet', fn($q) => $q->where('comp_id', $compagnieId))
                 ->pluck('voyage_id');
 
-            // Réservations validées
+            // Réservations validées (confirmées + payées)
             $reservationsValidees = Reservation::whereIn('voyage_id', $voyageIds)
-                ->where('res_statut', 2);
+                ->whereIn('res_statut', self::STATUTS_VALIDES);
 
             $revenuTotal = (float) (clone $reservationsValidees)->sum('montant_total');
             $totalReservations = (clone $reservationsValidees)->count();
@@ -355,7 +363,7 @@ class ReservationAdminController extends Controller
             // Réservations récentes (10 dernières)
             $reservationsRecentes = Reservation::with(['utilisateur', 'voyage.trajet.provinceDepart', 'voyage.trajet.provinceArrivee'])
                 ->whereIn('voyage_id', $voyageIds)
-                ->where('res_statut', 2)
+                ->whereIn('res_statut', self::STATUTS_VALIDES)
                 ->orderBy('created_at', 'desc')
                 ->limit(10)
                 ->get()
@@ -409,7 +417,7 @@ class ReservationAdminController extends Controller
                 ->pluck('voyage_id');
 
             $reservationsBase = Reservation::whereIn('voyage_id', $voyageIds)
-                ->where('res_statut', 2);
+                ->whereIn('res_statut', self::STATUTS_VALIDES);
 
             // CA par période
             $aujourdhui = (float)(clone $reservationsBase)->whereDate('created_at', today())->sum('montant_total');
@@ -506,7 +514,7 @@ class ReservationAdminController extends Controller
             // Réservations récentes (5 dernières)
             $reservationsRecentes = Reservation::with(['utilisateur', 'voyage.trajet.provinceDepart', 'voyage.trajet.provinceArrivee'])
                 ->whereIn('voyage_id', $voyageIds)
-                ->where('res_statut', 2)
+                ->whereIn('res_statut', self::STATUTS_VALIDES)
                 ->orderBy('created_at', 'desc')
                 ->limit(5)
                 ->get()
@@ -568,7 +576,7 @@ class ReservationAdminController extends Controller
 
             $query = Reservation::with(['utilisateur', 'voyage.trajet.provinceDepart', 'voyage.trajet.provinceArrivee'])
                 ->whereIn('voyage_id', $voyageIds)
-                ->where('res_statut', 2);
+                ->whereIn('res_statut', self::STATUTS_VALIDES);
 
             // Filtre par dates
             if ($request->filled('date_debut')) {
@@ -701,11 +709,10 @@ class ReservationAdminController extends Controller
                 return response()->json(['statut' => false, 'message' => 'Cette réservation ne concerne pas votre compagnie.', 'validation' => 'invalide'], 403);
             }
 
-            // Vérifier le statut
-            if ($reservation->res_statut !== 2) {
+            // Vérifier le statut : 2 (confirmée) requis pour embarquer
+            if (!in_array($reservation->res_statut, self::STATUTS_VALIDES, true)) {
                 $statutLabel = match ($reservation->res_statut) {
                     1 => 'en attente de paiement',
-                    3 => 'terminée',
                     4 => 'annulée',
                     5 => 'abandonnée',
                     default => 'dans un état inconnu'
@@ -789,7 +796,7 @@ class ReservationAdminController extends Controller
                 return response()->json(['statut' => false, 'message' => 'Non autorisé.'], 403);
             }
 
-            if ($reservation->res_statut !== 2) {
+            if (!in_array($reservation->res_statut, self::STATUTS_VALIDES, true)) {
                 return response()->json(['statut' => false, 'message' => 'Réservation non confirmée.'], 400);
             }
 
@@ -825,7 +832,7 @@ class ReservationAdminController extends Controller
                 ->pluck('voyage_id');
 
             $reservationsBase = Reservation::whereIn('voyage_id', $voyageIds)
-                ->where('res_statut', 2);
+                ->whereIn('res_statut', self::STATUTS_VALIDES);
 
             // ── Solde global ──
             $revenuBrut = (float)(clone $reservationsBase)->sum('montant_total');
@@ -894,7 +901,7 @@ class ReservationAdminController extends Controller
             // ── Historique des transactions (paginé) ──
             $query = Reservation::with(['utilisateur', 'voyage.trajet.provinceDepart', 'voyage.trajet.provinceArrivee'])
                 ->whereIn('voyage_id', $voyageIds)
-                ->where('res_statut', 2);
+                ->whereIn('res_statut', self::STATUTS_VALIDES);
 
             // Filtres optionnels
             if ($request->filled('date_debut')) {

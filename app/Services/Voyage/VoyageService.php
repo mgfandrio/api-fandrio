@@ -5,10 +5,13 @@ namespace App\Services\voyage;
 use App\Models\Voyages\Voyage;
 use App\Models\Trajet\Trajet;
 use App\Models\Voitures\Voitures;
+use App\Models\Reservation\Reservation;
+use App\Services\Notification\NotificationService;
 use App\DTOs\VoyageDTO;
 use App\Helpers\DateFormatter;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 
 
 
@@ -160,13 +163,24 @@ class VoyageService
 
 
     /**
-     * Met à jour automatiquement les statuts des voyages d'une compagnie :
-     * - Programmé → En cours : si toutes les places sont prises OU si l'heure de départ est atteinte
-     * - Programmé/En cours → Terminé : si la date du voyage est passée
+     * Met à jour automatiquement les statuts des voyages d'une compagnie (mode "lazy",
+     * appelé à chaque listage). Ne gère QUE les transitions Programmé (1) → En cours (2) :
+     * - Toutes les places sont prises
+     * - OU l'heure de départ est atteinte aujourd'hui
+     *
+     * IMPORTANT : Les transitions vers Terminé (3) et Annulé (4) sont gérées
+     * EXCLUSIVEMENT par la commande planifiée `voyages:gestion-statuts`
+     * (App\Console\Commands\GestionStatutVoyagesCommand) car elles nécessitent :
+     *   - Application du seuil de réservations (≥ 5 = terminé, sinon annulé+remboursement)
+     *   - Envoi de notifications à la compagnie
+     *   - Logique de remboursement
+     * Faire ces transitions ici dupliquerait la logique sans notifications/remboursement
+     * et provoquerait des incohérences (voyages marqués Terminé alors qu'ils auraient dû
+     * être Annulés faute de réservations suffisantes).
      */
     public static function autoCompleterVoyages(int $compagnieId): void
     {
-        // 1. Auto-compléter : places toutes réservées → En cours (complet)
+        // 1. Programmé → En cours : places toutes réservées (complet)
         Voyage::whereHas('trajet', function($q) use ($compagnieId) {
                 $q->where('comp_id', $compagnieId);
             })
@@ -174,7 +188,7 @@ class VoyageService
             ->whereRaw('places_reservees >= places_disponibles')
             ->update(['voyage_statut' => 2]);
 
-        // 2. Auto-compléter : heure de départ atteinte aujourd'hui → En cours
+        // 2. Programmé → En cours : heure de départ atteinte aujourd'hui
         Voyage::whereHas('trajet', function($q) use ($compagnieId) {
                 $q->where('comp_id', $compagnieId);
             })
@@ -182,17 +196,6 @@ class VoyageService
             ->where('voyage_date', '=', now()->toDateString())
             ->where('voyage_heure_depart', '<=', now()->format('H:i:s'))
             ->update(['voyage_statut' => 2]);
-
-        // 3. Terminé : date passée pour les voyages programmés ou en cours
-        Voyage::whereHas('trajet', function($q) use ($compagnieId) {
-                $q->where('comp_id', $compagnieId);
-            })
-            ->whereIn('voyage_statut', [1, 2])
-            ->where('voyage_date', '<', now()->toDateString())
-            ->update([
-                'voyage_statut' => 3,
-                'voyage_is_active' => false
-            ]);
     }
 
     /**
@@ -326,36 +329,160 @@ class VoyageService
 
 
     /**
-     * Annule un voyage
+     * Annule un voyage manuellement (par l'admin compagnie).
+     *
+     * Comportement (aligné sur le cron) :
+     *  - Toutes les réservations actives (statut 1 ou 2) sont passées à statut 4 (annulée).
+     *    → le trigger SQL décrémente automatiquement places_reservees.
+     *  - Les sièges réservés sont remis à disponible (siege_statut = 2).
+     *  - Le voyage est marqué statut=4 et is_active=false.
+     *  - Les clients concernés sont notifiés (avec mention remboursement à venir).
+     *  - Les admins de la compagnie sont notifiés.
+     *
+     * Conditions :
+     *  - Le voyage ne doit pas déjà être annulé (statut 4) ni terminé (statut 3).
      */
     public function annulerVoyage(int $voyageId): array
     {
         return DB::transaction(function () use ($voyageId) {
             $compagnieId = $this->getCompagnieUtilisateur();
 
-            $voyage = Voyage::whereHas('trajet', function($q) use ($compagnieId) {
-                $q->where('comp_id', $compagnieId);
-            })->findOrFail($voyageId);
+            $voyage = Voyage::with(['trajet.provinceDepart', 'trajet.provinceArrivee'])
+                ->whereHas('trajet', function($q) use ($compagnieId) {
+                    $q->where('comp_id', $compagnieId);
+                })
+                ->findOrFail($voyageId);
 
-            // Vérifier qu'il n'y a pas de réservations
-            if ($voyage->places_reservees > 0) {
-                throw new \Exception('Impossible d\'annuler un voyage avec des réservations existantes');
+            if ($voyage->voyage_statut === 4) {
+                throw new \Exception('Ce voyage est déjà annulé');
+            }
+            if ($voyage->voyage_statut === 3) {
+                throw new \Exception('Impossible d\'annuler un voyage terminé');
             }
 
-            // Annuler et rendre le voyage inactif
+            // 1. Récupérer les réservations actives avant changement (pour notifier les clients)
+            $reservationsActives = Reservation::where('voyage_id', $voyageId)
+                ->whereIn('res_statut', [1, 2])
+                ->get();
+
+            // 2. Annuler les réservations (le trigger SQL gère places_reservees)
+            Reservation::where('voyage_id', $voyageId)
+                ->whereIn('res_statut', [1, 2])
+                ->update(['res_statut' => 4]);
+
+            // 3. Libérer les sièges réservés (siege_statut = 2 disponible)
+            DB::table('fandrio_app.sieges_reserves')
+                ->where('voyage_id', $voyageId)
+                ->whereIn('siege_statut', [1, 3])
+                ->update([
+                    'siege_statut' => 2,
+                    'res_id' => null,
+                    'utilisateur_id' => null,
+                    'expire_lock' => null,
+                ]);
+
+            // 4. Annuler le voyage
             $voyage->update([
                 'voyage_statut' => 4,
-                'voyage_is_active' => false
+                'voyage_is_active' => false,
             ]);
 
-            return $this->formaterVoyageComplet($voyage);
+            // 5. Notifications (best-effort)
+            try {
+                $depart = $voyage->trajet?->provinceDepart?->pro_nom ?? 'N/A';
+                $arrivee = $voyage->trajet?->provinceArrivee?->pro_nom ?? 'N/A';
+                $voyageInfo = "{$depart} → {$arrivee} le " . $voyage->voyage_date->format('d/m/Y');
+
+                // Notifier les clients concernés
+                foreach ($reservationsActives as $reservation) {
+                    NotificationService::notifierClientVoyageAnnule(
+                        (int) $reservation->util_id,
+                        (int) $reservation->res_id,
+                        $voyageInfo
+                    );
+                }
+
+                // Notifier les admins de la compagnie (seulement s'il y avait des réservations)
+                if ($reservationsActives->isNotEmpty()) {
+                    NotificationService::notifierVoyageAnnule(
+                        (int) $compagnieId,
+                        $voyageInfo,
+                        $reservationsActives->count()
+                    );
+                }
+            } catch (\Exception $notifError) {
+                Log::warning('Notifications annulation voyage failed: ' . $notifError->getMessage());
+            }
+
+            return $this->formaterVoyageComplet($voyage->fresh(['trajet.provinceDepart', 'trajet.provinceArrivee', 'voiture']));
         });
     }
 
     /**
-     * Réactive un voyage annulé
+     * Réactive un voyage annulé (statut 4 → 1).
+     *
+     * Conditions strictes :
+     *  - voyage_statut == 4
+     *  - voyage_date >= aujourd'hui (pas de sens de réactiver un voyage passé)
+     *  - La voiture est toujours disponible pour cette date (sinon utiliser reprogrammerVoyage)
+     *
+     * NOTE : les réservations annulées ne sont PAS automatiquement restaurées
+     * (les clients ont été notifiés ; remboursements possiblement déjà émis).
+     * Les clients devront refaire leur réservation.
      */
     public function reactiverVoyage(int $voyageId): array
+    {
+        return DB::transaction(function () use ($voyageId) {
+            $compagnieId = $this->getCompagnieUtilisateur();
+
+            $voyage = Voyage::with(['trajet', 'voiture'])
+                ->whereHas('trajet', function($q) use ($compagnieId) {
+                    $q->where('comp_id', $compagnieId);
+                })
+                ->findOrFail($voyageId);
+
+            if ($voyage->voyage_statut !== 4) {
+                throw new \Exception('Seuls les voyages annulés peuvent être réactivés');
+            }
+
+            if ($voyage->voyage_date->isPast() && !$voyage->voyage_date->isToday()) {
+                throw new \Exception('Impossible de réactiver un voyage dont la date est passée. Utilisez la fonction \"reprogrammer\" pour créer un nouveau voyage à une nouvelle date.');
+            }
+
+            // Vérifier que la voiture est toujours dispo à cette date
+            $voiture = Voitures::where('comp_id', $compagnieId)
+                ->where('voit_id', $voyage->voit_id)
+                ->where('voit_statut', 1)
+                ->first();
+
+            if (!$voiture) {
+                throw new \Exception('La voiture associée à ce voyage n\'est plus active');
+            }
+
+            if (!$voiture->estDisponiblePourDate($voyage->voyage_date)) {
+                throw new \Exception('La voiture n\'est plus disponible pour cette date. Utilisez la fonction \"reprogrammer\" pour choisir une autre voiture ou date.');
+            }
+
+            $voyage->update([
+                'voyage_statut' => 1,
+                'voyage_is_active' => true,
+            ]);
+
+            return $this->formaterVoyageComplet($voyage->fresh(['trajet.provinceDepart', 'trajet.provinceArrivee', 'voiture']));
+        });
+    }
+
+    /**
+     * Bascule la visibilité du voyage pour les réservations clients (pause / reprise).
+     *
+     * Cas d'usage : voiture en maintenance courte, ajustement temporaire des informations,
+     * etc. Le voyage existe toujours mais n'apparait plus en recherche client.
+     *
+     * Conditions :
+     *  - voyage_statut IN (1, 2)  (impossible de modifier l'activation d'un voyage
+     *    terminé ou annulé ; ces états forcent is_active=false par invariant)
+     */
+    public function togglerActivationVoyage(int $voyageId): array
     {
         return DB::transaction(function () use ($voyageId) {
             $compagnieId = $this->getCompagnieUtilisateur();
@@ -364,17 +491,104 @@ class VoyageService
                 $q->where('comp_id', $compagnieId);
             })->findOrFail($voyageId);
 
-            // Vérifier que le voyage est bien annulé
-            if ($voyage->voyage_statut !== 4) {
-                throw new \Exception('Seuls les voyages annulés peuvent être réactivés');
+            if (!in_array($voyage->voyage_statut, [1, 2], true)) {
+                throw new \Exception('Seuls les voyages programmés ou en cours peuvent être mis en pause / réactivés. Pour un voyage annulé, utilisez \"réactiver\" ou \"reprogrammer\".');
             }
 
-            // Réactiver le voyage
             $voyage->update([
-                'voyage_is_active' => true
+                'voyage_is_active' => !$voyage->voyage_is_active,
             ]);
 
-            return $this->formaterVoyageComplet($voyage);
+            return $this->formaterVoyageComplet($voyage->fresh(['trajet.provinceDepart', 'trajet.provinceArrivee', 'voiture']));
+        });
+    }
+
+    /**
+     * Reprogramme un voyage existant en en créant un NOUVEAU à une date différente.
+     *
+     * Pattern « Cloner et reprogrammer » : permet de réutiliser le paramétrage
+     * d'un voyage (trajet, voiture, type, places, heure) sans avoir à tout re-saisir,
+     * tout en préservant l'historique du voyage source.
+     *
+     * Le voyage source est inchangé. Un nouveau voyage est créé (statut=1, is_active=true,
+     * places_reservees=0).
+     *
+     * Paramètres requis :
+     *  - voyage_date : nouvelle date (>= aujourd'hui)
+     * Paramètres optionnels (sinon copiés du voyage source) :
+     *  - voyage_heure_depart
+     *  - voit_id
+     *  - places_disponibles
+     */
+    public function reprogrammerVoyage(int $voyageSourceId, array $data): array
+    {
+        return DB::transaction(function () use ($voyageSourceId, $data) {
+            $compagnieId = $this->getCompagnieUtilisateur();
+
+            $source = Voyage::with(['trajet', 'voiture'])
+                ->whereHas('trajet', function($q) use ($compagnieId) {
+                    $q->where('comp_id', $compagnieId);
+                })
+                ->findOrFail($voyageSourceId);
+
+            // Validation date
+            if (empty($data['voyage_date'])) {
+                throw new \Exception('La nouvelle date du voyage est requise');
+            }
+            $nouvelleDate = $data['voyage_date'];
+            if (strtotime($nouvelleDate) === false) {
+                throw new \Exception('Format de date invalide');
+            }
+            $dateCarbon = \Carbon\Carbon::parse($nouvelleDate)->startOfDay();
+            if ($dateCarbon->isBefore(now()->startOfDay())) {
+                throw new \Exception('La nouvelle date doit être aujourd\'hui ou dans le futur');
+            }
+
+            // Récupération des champs (avec valeurs par défaut héritées du source)
+            $heureDepart = $data['voyage_heure_depart'] ?? $source->voyage_heure_depart;
+            $voitId = isset($data['voit_id']) ? (int) $data['voit_id'] : (int) $source->voit_id;
+            $placesDisponibles = isset($data['places_disponibles'])
+                ? (int) $data['places_disponibles']
+                : (int) $source->places_disponibles;
+
+            // Vérifier la voiture
+            $voiture = Voitures::where('comp_id', $compagnieId)
+                ->where('voit_id', $voitId)
+                ->where('voit_statut', 1)
+                ->first();
+
+            if (!$voiture) {
+                throw new \Exception('La voiture sélectionnée n\'est pas active ou n\'appartient pas à votre compagnie');
+            }
+
+            if (!$voiture->estDisponiblePourDate($nouvelleDate)) {
+                throw new \Exception('Cette voiture n\'est pas disponible pour la date sélectionnée');
+            }
+
+            if ($placesDisponibles > $voiture->voit_places) {
+                throw new \Exception('Le nombre de places ne peut pas dépasser la capacité du véhicule (' . $voiture->voit_places . ')');
+            }
+            if ($placesDisponibles <= 0) {
+                throw new \Exception('Le nombre de places doit être supérieur à 0');
+            }
+
+            // Création du nouveau voyage (clone)
+            $nouveau = Voyage::create([
+                'voyage_date' => $nouvelleDate,
+                'voyage_heure_depart' => $heureDepart,
+                'voyage_type' => $source->voyage_type,
+                'traj_id' => $source->traj_id,
+                'voit_id' => $voitId,
+                'voyage_statut' => 1,
+                'voyage_is_active' => true,
+                'places_disponibles' => $placesDisponibles,
+                'places_reservees' => 0,
+            ]);
+
+            return [
+                'voyage_source_id' => (int) $source->voyage_id,
+                'voyage' => $this->formaterVoyageComplet($nouveau->fresh(['trajet.provinceDepart', 'trajet.provinceArrivee', 'voiture'])),
+            ];
         });
     }
 

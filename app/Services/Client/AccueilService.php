@@ -34,7 +34,7 @@ class AccueilService
             ? "accueil_province_{$provinceProche->pro_id}_{$slot}"
             : "accueil_aleatoire_{$slot}";
 
-        return Cache::remember($cacheKey, self::CACHE_DURATION, function () use ($provinceProche) {
+        $donnees = Cache::remember($cacheKey, self::CACHE_DURATION, function () use ($provinceProche) {
             return [
                 'compagnies' => $this->getCompagnies($provinceProche),
                 'voyages'    => $this->getVoyages($provinceProche),
@@ -44,6 +44,49 @@ class AccueilService
                 ] : null,
             ];
         });
+
+        // Rafraîchir les places disponibles en temps réel (hors cache)
+        // pour que la liste des voyages à venir reflète les réservations récentes.
+        $donnees['voyages'] = $this->rafraichirPlacesDisponibles($donnees['voyages'] ?? []);
+
+        return $donnees;
+    }
+
+    /**
+     * Recalcule places_disponibles / est_complet à partir des valeurs actuelles
+     * en base, sans recharger toute la structure mise en cache.
+     */
+    private function rafraichirPlacesDisponibles(array $voyages): array
+    {
+        if (empty($voyages)) {
+            return $voyages;
+        }
+
+        $ids = array_values(array_filter(array_map(
+            fn($v) => $v['voyage_id'] ?? null,
+            $voyages
+        )));
+
+        if (empty($ids)) {
+            return $voyages;
+        }
+
+        $places = Voyage::whereIn('voyage_id', $ids)
+            ->get(['voyage_id', 'places_disponibles', 'places_reservees'])
+            ->keyBy('voyage_id');
+
+        foreach ($voyages as &$v) {
+            $id = $v['voyage_id'] ?? null;
+            if ($id !== null && isset($places[$id])) {
+                $row = $places[$id];
+                $restantes = (int) $row->places_disponibles - (int) $row->places_reservees;
+                $v['places_disponibles'] = max(0, $restantes);
+                $v['est_complet'] = $restantes <= 0;
+            }
+        }
+        unset($v);
+
+        return $voyages;
     }
 
     /**

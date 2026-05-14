@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\Notifications\Notification;
+use App\Models\Reservation\Reservation;
 use App\Models\Voyages\Voyage;
 use App\Services\Notification\NotificationService;
 use Illuminate\Console\Command;
@@ -94,17 +95,40 @@ class GestionStatutVoyagesCommand extends Command
             ->where('places_reservees', '<', self::SEUIL_RESERVATIONS)
             ->get();
 
+        $clientsNotifies = 0;
+
         foreach ($voyagesAnnulesPeuRes as $voyage) {
             $voyage->update([
                 'voyage_statut' => 4,
                 'voyage_is_active' => false,
             ]);
 
+            $voyageInfo = $this->formaterVoyageInfo($voyage);
+
+            // Notifier la compagnie
             $compId = $voyage->trajet->comp_id ?? null;
             if ($compId) {
-                $voyageInfo = $this->formaterVoyageInfo($voyage);
                 NotificationService::notifierVoyageAnnule($compId, $voyageInfo, (int)$voyage->places_reservees);
             }
+
+            // Notifier chaque client de l'annulation + passer leur réservation à statut 4
+            $reservations = Reservation::where('voyage_id', $voyage->voyage_id)
+                ->whereIn('res_statut', [1, 2]) // en attente ou confirmée
+                ->get();
+
+            foreach ($reservations as $reservation) {
+                $reservation->update(['res_statut' => 4]);
+                NotificationService::notifierClientVoyageAnnule(
+                    $reservation->util_id,
+                    $reservation->res_id,
+                    $voyageInfo
+                );
+                $clientsNotifies++;
+            }
+        }
+
+        if ($clientsNotifies > 0) {
+            $this->info("→ {$clientsNotifies} client(s) notifié(s) de l'annulation (réservations passées à statut 4)");
         }
 
         if ($voyagesAnnulesPeuRes->count() > 0) {

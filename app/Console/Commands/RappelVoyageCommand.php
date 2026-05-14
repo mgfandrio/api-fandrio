@@ -99,6 +99,56 @@ class RappelVoyageCommand extends Command
             $this->info("Avertissements annulation envoyés : {$avertissementsEnvoyes} compagnie(s)");
         }
 
+        // ── 3. Avertissement clients à 8h du départ : voyages à risque (< 5 réservations) ──
+        // Permet aux clients de chercher un voyage alternatif avant l'annulation automatique.
+        $maintenant = $today->copy()->setTimeFrom(now());
+        $dans8h = (clone $maintenant)->addHours(8);
+
+        $voyagesProchesRisque = Voyage::with(['trajet.provinceDepart', 'trajet.provinceArrivee'])
+            ->whereIn('voyage_statut', [1, 2])
+            ->where('places_reservees', '>', 0)
+            ->where('places_reservees', '<', self::SEUIL_RESERVATIONS)
+            ->whereRaw("(voyage_date::text || ' ' || voyage_heure_depart)::timestamp BETWEEN ? AND ?", [
+                $maintenant->toDateTimeString(),
+                $dans8h->toDateTimeString(),
+            ])
+            ->get();
+
+        $clientsAvertis = 0;
+
+        foreach ($voyagesProchesRisque as $voyage) {
+            $reservations = Reservation::where('voyage_id', $voyage->voyage_id)
+                ->where('res_statut', 2) // confirmées
+                ->get();
+
+            $voyageInfo = $this->formaterVoyageInfo($voyage);
+            $departTs = Carbon::parse($voyage->voyage_date->toDateString() . ' ' . $voyage->voyage_heure_depart);
+            $heuresRestantes = max(1, (int) round(now()->diffInMinutes($departTs) / 60));
+
+            foreach ($reservations as $reservation) {
+                // Éviter les doublons (1 seul avertissement par réservation, sur 24h)
+                $dejaAverti = Notification::where('res_id', $reservation->res_id)
+                    ->where('notif_type', 3)
+                    ->where('notif_titre', 'LIKE', '%risque d%annul%')
+                    ->where('created_at', '>=', now()->subHours(24))
+                    ->exists();
+
+                if (!$dejaAverti) {
+                    NotificationService::notifierClientRisqueAnnulation(
+                        $reservation->util_id,
+                        $reservation->res_id,
+                        $voyageInfo,
+                        $heuresRestantes
+                    );
+                    $clientsAvertis++;
+                }
+            }
+        }
+
+        if ($clientsAvertis > 0) {
+            $this->info("Clients prévenus du risque d'annulation : {$clientsAvertis}");
+        }
+
         return Command::SUCCESS;
     }
 

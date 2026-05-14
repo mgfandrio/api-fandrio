@@ -154,6 +154,22 @@ class NotificationService
             ]);
         }
     }
+
+    /**
+     * Prévenir un client à l'avance (8h avant le départ) que son voyage risque d'être
+     * annulé faute de réservations suffisantes (< 5). Lui suggérer de chercher un autre voyage.
+     */
+    public static function notifierClientRisqueAnnulation(int $utilId, int $resId, string $voyageInfo, int $heuresRestantes): void
+    {
+        self::envoyer([
+            'type' => 3, // annulation (catégorie)
+            'destinataire_type' => 1,
+            'destinataire_id' => $utilId,
+            'titre' => '⚠️ Votre voyage risque d\'être annulé',
+            'message' => "Votre voyage {$voyageInfo} pourrait être annulé dans environ {$heuresRestantes}h faute de réservations suffisantes. Nous vous conseillons de chercher dès maintenant un voyage alternatif. Si l'annulation est confirmée, vous serez intégralement remboursé.",
+            'res_id' => $resId,
+        ]);
+    }
     /**
      * Envoyer la push notification via Expo Push API
      */

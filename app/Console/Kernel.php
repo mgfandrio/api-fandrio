@@ -18,8 +18,9 @@ class Kernel extends ConsoleKernel
         // Gestion automatique des statuts de voyages (toutes les 5 minutes)
         $schedule->command('voyages:gestion-statuts')->everyFiveMinutes();
 
-        // Rappels de voyage : 2 jours, 1 jour, jour J (chaque jour à 7h)
-        $schedule->command('voyages:rappels')->dailyAt('07:00');
+        // Rappels de voyage : J-2, J-1, J-0 (dédup par jour) + avertissement clients 8h avant
+        // (toutes les heures pour couvrir les voyages partant à n'importe quelle heure)
+        $schedule->command('voyages:rappels')->hourly();
 
         // Génération automatique des collectes de commission (chaque jour à 06:00)
         $schedule->command('commissions:generer-collectes')->dailyAt('06:00');

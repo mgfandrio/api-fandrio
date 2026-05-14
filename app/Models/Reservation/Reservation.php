@@ -27,7 +27,12 @@ class Reservation extends Model
         'type_paie_id',
         'numero_paiement',
         'date_limite_paiement',
-        'date_annulation_possible'
+        'date_annulation_possible',
+        'res_remb_statut',
+        'res_remb_montant',
+        'res_remb_date',
+        'res_remb_reference',
+        'res_remb_note',
     ];
 
     /**
@@ -41,6 +46,9 @@ class Reservation extends Model
         'updated_at' => 'datetime',
         'res_statut' => 'integer',
         'nb_voyageurs' => 'integer',
+        'res_remb_statut' => 'integer',
+        'res_remb_montant' => 'decimal:2',
+        'res_remb_date' => 'datetime',
     ];
 
     /**

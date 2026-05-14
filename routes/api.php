@@ -24,6 +24,7 @@ use App\Http\Controllers\Client\DisponibiliteController;
 use App\Http\Controllers\Voiture\SiegeController;
 use App\Http\Controllers\Voiture\PlanSiegeController;
 use App\Http\Controllers\AdminCompagnie\ReservationAdminController;
+use App\Http\Controllers\AdminCompagnie\RemboursementController;
 use App\Http\Controllers\Notification\NotificationController;
 use Illuminate\Support\Facades\Route;
 
@@ -133,6 +134,11 @@ Route::middleware(['api.key', 'auth:api'])->group(function () {
         Route::post('/{id}/confirm', [\App\Http\Controllers\Client\ReservationController::class, 'confirm']);
         Route::post('/{id}/cancel', [\App\Http\Controllers\Client\ReservationController::class, 'cancel']);
         Route::get('/{id}/invoice', [\App\Http\Controllers\Client\ReservationController::class, 'getInvoice']);
+    });
+
+    // Suivi des remboursements côté client
+    Route::prefix('client/remboursements')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Client\RemboursementClientController::class, 'index']);
     });
 });
 
@@ -285,5 +291,13 @@ Route::middleware(['api.key', 'auth:api', 'role:2'])->prefix('adminCompagnie')->
         Route::post('/{resId}/embarquer', [ReservationAdminController::class, 'embarquer']);
         Route::get('/portefeuille', [ReservationAdminController::class, 'portefeuille']);
         Route::get('/ma-collecte', [ReservationAdminController::class, 'maCollecte']);
+    });
+
+    // Gestion des remboursements clients
+    Route::prefix('remboursements')->group(function () {
+        Route::get('/', [RemboursementController::class, 'index']);
+        Route::get('/statistiques', [RemboursementController::class, 'statistiques']);
+        Route::post('/{resId}/marquer-traite', [RemboursementController::class, 'marquerTraite']);
+        Route::post('/{resId}/refuser', [RemboursementController::class, 'refuser']);
     });
 });

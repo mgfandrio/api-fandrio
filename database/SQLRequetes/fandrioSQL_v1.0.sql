@@ -277,6 +277,14 @@ CREATE TABLE fandrio_app.reservations (
     numero_paiement VARCHAR(50),
     date_limite_paiement TIMESTAMP,
     date_annulation_possible TIMESTAMP,
+    -- Suivi des remboursements (cas voyage annulé par la compagnie ou auto)
+    res_remb_statut INTEGER NOT NULL DEFAULT 0
+        CHECK (res_remb_statut IN (0, 1, 2, 3)), -- 0: N/A, 1: en attente, 2: traité, 3: refusé
+    res_remb_montant DECIMAL(10,2) NULL
+        CHECK (res_remb_montant IS NULL OR res_remb_montant >= 0),
+    res_remb_date TIMESTAMP NULL,
+    res_remb_reference VARCHAR(100) NULL,
+    res_remb_note TEXT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CHECK (montant_avance <= montant_total),
@@ -286,6 +294,11 @@ CREATE TABLE fandrio_app.reservations (
 COMMENT ON TABLE fandrio_app.reservations IS 'Table des réservations effectuées';
 COMMENT ON COLUMN fandrio_app.reservations.numero_paiement IS 'Numéro de téléphone ou référence de transaction mobile money';
 COMMENT ON COLUMN fandrio_app.reservations.date_annulation_possible IS '3 jours avant le voyage';
+COMMENT ON COLUMN fandrio_app.reservations.res_remb_statut IS '0=Non applicable, 1=En attente, 2=Traité, 3=Refusé';
+COMMENT ON COLUMN fandrio_app.reservations.res_remb_montant IS 'Montant à rembourser (généralement égal à montant_avance payé)';
+COMMENT ON COLUMN fandrio_app.reservations.res_remb_date IS 'Date de traitement effectif du remboursement par la compagnie';
+COMMENT ON COLUMN fandrio_app.reservations.res_remb_reference IS 'Référence de la transaction de remboursement (numéro mobile money, etc.)';
+COMMENT ON COLUMN fandrio_app.reservations.res_remb_note IS 'Note libre de la compagnie (ex: motif de refus)';
 
 
 -- =============================================================================
@@ -474,6 +487,9 @@ CREATE INDEX idx_utilisateurs_push_token ON fandrio_app.utilisateurs(push_token)
 -- Réservations
 CREATE INDEX idx_reservations_numero ON fandrio_app.reservations(res_numero);
 CREATE INDEX idx_reservations_statut ON fandrio_app.reservations(res_statut);
+CREATE INDEX idx_reservations_remb_statut
+    ON fandrio_app.reservations(res_remb_statut)
+    WHERE res_remb_statut > 0;
 CREATE UNIQUE INDEX idx_reservations_numero_paiement_unique
     ON fandrio_app.reservations (numero_paiement)
     WHERE numero_paiement IS NOT NULL

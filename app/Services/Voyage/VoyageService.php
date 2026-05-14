@@ -365,10 +365,15 @@ class VoyageService
                 ->whereIn('res_statut', [1, 2])
                 ->get();
 
-            // 2. Annuler les réservations (le trigger SQL gère places_reservees)
-            Reservation::where('voyage_id', $voyageId)
-                ->whereIn('res_statut', [1, 2])
-                ->update(['res_statut' => 4]);
+            // 2. Annuler les réservations + ouvrir un remboursement pour celles déjà payées
+            foreach ($reservationsActives as $resa) {
+                $aPaye = (float) $resa->montant_avance > 0;
+                $resa->update([
+                    'res_statut' => 4,
+                    'res_remb_statut' => $aPaye ? 1 : 0,
+                    'res_remb_montant' => $aPaye ? $resa->montant_avance : null,
+                ]);
+            }
 
             // 3. Libérer les sièges réservés (siege_statut = 2 disponible)
             DB::table('fandrio_app.sieges_reserves')

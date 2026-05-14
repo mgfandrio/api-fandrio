@@ -170,6 +170,38 @@ class NotificationService
             'res_id' => $resId,
         ]);
     }
+
+    /**
+     * Notifier un client que son remboursement a été effectué par la compagnie.
+     */
+    public static function notifierClientRemboursementTraite(int $utilId, int $resId, float $montant, string $voyageInfo, ?string $reference = null): void
+    {
+        $montantFormate = number_format($montant, 0, ',', ' ');
+        $refTxt = $reference ? " Réf. : {$reference}." : '';
+        self::envoyer([
+            'type' => 3,
+            'destinataire_type' => 1,
+            'destinataire_id' => $utilId,
+            'titre' => '✅ Remboursement effectué',
+            'message' => "Votre remboursement de {$montantFormate} Ar pour le voyage {$voyageInfo} a été traité.{$refTxt}",
+            'res_id' => $resId,
+        ]);
+    }
+
+    /**
+     * Notifier un client que sa demande de remboursement a été refusée.
+     */
+    public static function notifierClientRemboursementRefuse(int $utilId, int $resId, string $voyageInfo, string $motif): void
+    {
+        self::envoyer([
+            'type' => 3,
+            'destinataire_type' => 1,
+            'destinataire_id' => $utilId,
+            'titre' => '❌ Remboursement refusé',
+            'message' => "Votre demande de remboursement pour le voyage {$voyageInfo} a été refusée. Motif : {$motif}. Pour plus d'informations, contactez la compagnie.",
+            'res_id' => $resId,
+        ]);
+    }
     /**
      * Envoyer la push notification via Expo Push API
      */

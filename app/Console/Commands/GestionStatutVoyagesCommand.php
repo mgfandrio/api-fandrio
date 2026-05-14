@@ -112,12 +112,18 @@ class GestionStatutVoyagesCommand extends Command
             }
 
             // Notifier chaque client de l'annulation + passer leur réservation à statut 4
+            // + Marquer le remboursement en attente (uniquement si paiement reçu)
             $reservations = Reservation::where('voyage_id', $voyage->voyage_id)
-                ->whereIn('res_statut', [1, 2]) // en attente ou confirmée
+                ->whereIn('res_statut', [1, 2])
                 ->get();
 
             foreach ($reservations as $reservation) {
-                $reservation->update(['res_statut' => 4]);
+                $aPaye = (float) $reservation->montant_avance > 0;
+                $reservation->update([
+                    'res_statut' => 4,
+                    'res_remb_statut' => $aPaye ? 1 : 0, // 1 = en attente si paiement reçu
+                    'res_remb_montant' => $aPaye ? $reservation->montant_avance : null,
+                ]);
                 NotificationService::notifierClientVoyageAnnule(
                     $reservation->util_id,
                     $reservation->res_id,

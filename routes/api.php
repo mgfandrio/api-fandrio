@@ -56,6 +56,10 @@ Route::middleware(['api.key'])->group(function () {
         Route::get('/', [CompagnieController::class, 'index']);
         Route::get('/{id}', [CompagnieController::class, 'show']);
     });
+
+    // Rafraîchissement du token JWT (doit accepter les tokens expirés
+    // dans la fenêtre refresh_ttl, donc PAS de middleware auth:api).
+    Route::post('/rafraichir-token', [AuthentificationController::class, 'rafraichir']);
 });
 
 
@@ -75,7 +79,6 @@ Route::middleware(['api.key', 'throttle.disponibilite:30,1'])->group(function() 
 // Routes protégées (nécessitent token JWT + clé API) / pour tous les types utilisateurs
 Route::middleware(['api.key', 'auth:api'])->group(function () {
     // Routes d'authentification
-    Route::post('/rafraichir-token', [AuthentificationController::class, 'rafraichir']);
     Route::post('/deconnexion', [AuthentificationController::class, 'deconnexion']);
     Route::get('/moi', [AuthentificationController::class, 'moi']);
 

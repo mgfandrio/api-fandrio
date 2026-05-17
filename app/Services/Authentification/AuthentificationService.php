@@ -67,13 +67,25 @@ class AuthentificationService
     }
 
     /**
-     * Rafraîchit le token JWT
+     * Rafraîchit le token JWT.
+     *
+     * Note : cette méthode doit pouvoir s'exécuter même si le token courant
+     * est expiré (tant qu'on est encore dans la fenêtre refresh_ttl).
+     * C'est pourquoi la route associée NE DOIT PAS être protégée par
+     * le middleware `auth:api`, qui rejette les tokens expirés avant
+     * d'atteindre le contrôleur.
      */
     public function rafraichirToken(): array
     {
         try {
-            $nouveauToken = JWTAuth::refresh();
-            $utilisateur = JWTAuth::user();
+            // parseToken() lit le token depuis l'en-tête Authorization.
+            // refresh() accepte les tokens expirés tant que refresh_ttl
+            // n'est pas dépassé.
+            $nouveauToken = JWTAuth::parseToken()->refresh();
+
+            // Récupérer l'utilisateur depuis le NOUVEAU token (l'ancien
+            // n'est plus exploitable via JWTAuth::user()).
+            $utilisateur = JWTAuth::setToken($nouveauToken)->toUser();
 
             return [
                 'statut' => true,

@@ -169,6 +169,7 @@ Route::middleware(['api.key', 'auth:api', 'role:3'])->prefix('admin')->group(fun
         Route::get('/detailCompagnie/{id}', [CompagnieController::class, 'show']);
         Route::put('/updateCompagnie/{id}', [CompagnieController::class, 'update']);
         Route::patch('/{id}/statut', [CompagnieController::class, 'changerStatut']);
+        Route::patch('/{id}/modes', [CompagnieController::class, 'mettreAJourModes']);
         Route::delete('/{id}', [CompagnieController::class, 'destroy']);
     });
 

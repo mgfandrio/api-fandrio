@@ -60,6 +60,15 @@ class Voyage extends Model
     }
 
     /**
+     * Catégorie du voyage dérivée du trajet (classique|vip|premium).
+     * Retourne 'classique' par défaut si le trajet n'est pas chargé.
+     */
+    public function getVoyageCategorieAttribute(): string
+    {
+        return $this->trajet?->traj_categorie ?? 'classique';
+    }
+
+    /**
      * Scope pour les futurs voyages
      */
     public function scopeFutur($query) {

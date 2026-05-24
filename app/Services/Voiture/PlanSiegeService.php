@@ -46,23 +46,17 @@ class PlanSiegeService
 
     /**
      * Génère automatiquement un plan de sièges pour une voiture
+     * en tenant compte de la catégorie (classique, vip, premium).
      */
-    public function genererPlanAutomatique(int $voitureId, int $nombrePlaces): array
+    public function genererPlanAutomatique(int $voitureId, int $nombrePlaces, string $categorie = 'classique'): array
     {
-        return DB::transaction(function () use ($voitureId, $nombrePlaces) {
-            $sieges = [];
-            for ($i = 1; $i <= $nombrePlaces; $i++) {
-                $sieges[] = $i;
-            }
-
-            $config = [
-                'sieges' => $sieges
-            ];
+        return DB::transaction(function () use ($voitureId, $nombrePlaces, $categorie) {
+            $config = $this->construireConfigParCategorie($nombrePlaces, $categorie);
 
             $plan = PlanSiege::updateOrCreate(
                 ['voit_id' => $voitureId],
                 [
-                    'plan_nom' => 'Plan Automatique',
+                    'plan_nom' => 'Plan Automatique (' . ucfirst($categorie) . ')',
                     'config_sieges' => $config,
                     'plan_statut' => 1
                 ]
@@ -72,6 +66,49 @@ class PlanSiegeService
 
             return $this->formaterPlan($plan);
         });
+    }
+
+    /**
+     * Construit la structure config_sieges selon la catégorie du véhicule.
+     *  - classique : 2+2 (4 sièges / rangée)
+     *  - vip       : 1+1 (2 sièges / rangée, larges)
+     *  - premium   : 2+1 (3 sièges / rangée)
+     */
+    private function construireConfigParCategorie(int $nombrePlaces, string $categorie): array
+    {
+        $siegesParRangee = match ($categorie) {
+            'vip'     => 2,
+            'premium' => 3,
+            default   => 4,
+        };
+
+        $lettres = range('A', chr(ord('A') + $siegesParRangee - 1));
+        $rangees = [];
+        $compteur = 0;
+        $numeroRangee = 1;
+
+        while ($compteur < $nombrePlaces) {
+            $siegesRangee = [];
+            for ($i = 0; $i < $siegesParRangee && $compteur < $nombrePlaces; $i++) {
+                $siegesRangee[] = [
+                    'numero' => $numeroRangee . $lettres[$i],
+                    'lettre' => $lettres[$i],
+                    'type'   => 'standard',
+                ];
+                $compteur++;
+            }
+            $rangees[] = [
+                'numero' => $numeroRangee,
+                'sieges' => $siegesRangee,
+            ];
+            $numeroRangee++;
+        }
+
+        return [
+            'categorie'        => $categorie,
+            'sieges_par_rangee'=> $siegesParRangee,
+            'rangees'          => $rangees,
+        ];
     }
 
     /**

@@ -239,6 +239,43 @@ class CompagnieController extends Controller
     }
 
     /**
+     * Active/désactive les modes VIP/Premium d'une compagnie (super-admin).
+     */
+    public function mettreAJourModes(Request $request, int $id): JsonResponse
+    {
+        try {
+            $request->validate([
+                'mode_vip' => 'sometimes|boolean',
+                'mode_premium' => 'sometimes|boolean',
+            ]);
+
+            $resultat = $this->compagnieService->mettreAJourModes(
+                $id,
+                $request->only(['mode_vip', 'mode_premium'])
+            );
+
+            return response()->json([
+                'statut' => true,
+                'message' => 'Modes mis à jour avec succès',
+                'data' => $resultat
+            ]);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'statut' => false,
+                'message' => 'Données invalides',
+                'erreurs' => $e->errors()
+            ], 422);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'statut' => false,
+                'message' => $e->getMessage()
+            ], 400);
+        }
+    }
+
+    /**
      * Supprime une compagnie
      */
     public function destroy(int $id): JsonResponse

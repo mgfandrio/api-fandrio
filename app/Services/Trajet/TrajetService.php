@@ -42,6 +42,9 @@ class TrajetService
             // Valider le DTO
             $trajetDTO->validate();
 
+            // Garde-fou catégorie : la compagnie doit avoir le mode activé
+            $this->assertCategorieAutorisee($compagnie, $trajetDTO->trajCategorie);
+
             // Vérifier si un trajet similaire existe déjà pour la compagnie
             if ($this->trajetExiste($compagnie->comp_id, $trajetDTO->proDepart, $trajetDTO->proArrivee )) {
                 throw new \Exception('Un trajet avec le même départ et arrivée existe déjà pour votre compagnie');
@@ -55,7 +58,8 @@ class TrajetService
                 'traj_km'    => $trajetDTO->trajKm,
                 'traj_duree'  => $trajetDTO->trajDuree,
                 'comp_id'    => $compagnie->comp_id,
-                'traj_statut' => 1 // Actif par défaut
+                'traj_statut' => 1, // Actif par défaut
+                'traj_categorie' => $trajetDTO->trajCategorie
             ]);
 
             return $this->formaterTrajet($trajet);
@@ -138,6 +142,18 @@ class TrajetService
             // Valider le DTO
             $trajetDTO->validate();
 
+            // Garde-fou catégorie
+            $this->assertCategorieAutorisee($compagnie, $trajetDTO->trajCategorie);
+
+            // Si la catégorie change alors que des voyages existent, on bloque
+            // pour éviter une incohérence avec les voitures déjà liées.
+            if ($trajet->traj_categorie !== $trajetDTO->trajCategorie
+                && $trajet->voyages()->exists()) {
+                throw new \Exception(
+                    'Impossible de changer la catégorie d\'un trajet ayant déjà des voyages programmés.'
+                );
+            }
+
             // Vérifier les doublons (exclure le trajet actuel)
             if ($this->trajetExiste($compagnie->comp_id, $trajetDTO->proDepart, $trajetDTO->proArrivee, $trajetId)) {
                 throw new \Exception('Un autre trajet avec le même départ et arrivée existe déjà');
@@ -150,6 +166,7 @@ class TrajetService
                 'traj_tarif' => $trajetDTO->trajTarif,
                 'traj_km'    => $trajetDTO->trajKm,
                 'traj_duree'  => $trajetDTO->trajDuree,
+                'traj_categorie' => $trajetDTO->trajCategorie,
             ]);
 
             return $this->formaterTrajet($trajet->fresh());
@@ -227,6 +244,19 @@ class TrajetService
         return $query->exists();
     }
 
+    /**
+     * Vérifie que la compagnie peut utiliser la catégorie demandée.
+     */
+    private function assertCategorieAutorisee(Compagnie $compagnie, string $categorie): void
+    {
+        if ($categorie === 'vip' && !$compagnie->comp_mode_vip) {
+            throw new \Exception('Le mode VIP n\'est pas activé pour votre compagnie.');
+        }
+        if ($categorie === 'premium' && !$compagnie->comp_mode_premium) {
+            throw new \Exception('Le mode Premium n\'est pas activé pour votre compagnie.');
+        }
+    }
+
 
     /**
      * Formate les informations d'un trajet
@@ -241,6 +271,7 @@ class TrajetService
             'duree' => $trajet->traj_duree,
             'duree_formatee' => $trajet->getDureeFormatee(),
             'statut' => $trajet->traj_statut,
+            'categorie' => $trajet->traj_categorie ?? 'classique',
             'date_creation' => DateFormatter::formatDateTime($trajet->created_at)
         ];
     }

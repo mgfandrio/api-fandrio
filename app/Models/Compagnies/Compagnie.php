@@ -31,13 +31,17 @@ class Compagnie extends Model
         'comp_localisation',
         'comm_frequence_collecte',
         'comm_jour_collecte',
-        'comm_actif'
+        'comm_actif',
+        'comp_mode_vip',
+        'comp_mode_premium'
     ];
 
     protected $casts = [
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
-        'comm_actif'  => 'boolean'
+        'comm_actif'  => 'boolean',
+        'comp_mode_vip' => 'boolean',
+        'comp_mode_premium' => 'boolean'
     ];
 
     /**

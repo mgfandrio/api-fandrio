@@ -23,7 +23,8 @@ class Trajet extends Model
         'traj_km',
         'traj_duree',
         'comp_id',
-        'traj_statut'
+        'traj_statut',
+        'traj_categorie'
     ];
 
     protected $casts = [

@@ -24,7 +24,8 @@ class Voitures extends Model
         'voit_places',
         'voit_statut',
         'comp_id',
-        'chauff_id'
+        'chauff_id',
+        'voit_categorie'
     ];
 
     protected $casts = [

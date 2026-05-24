@@ -314,6 +314,34 @@ class CompagnieService
     }
 
     /**
+     * Active/désactive les modes VIP et/ou Premium d'une compagnie.
+     * Réservé au super-admin (role 3).
+     *
+     * @param int   $compagnieId
+     * @param array $modes  ['mode_vip' => bool, 'mode_premium' => bool]
+     */
+    public function mettreAJourModes(int $compagnieId, array $modes): array
+    {
+        $compagnie = Compagnie::findOrFail($compagnieId);
+
+        $update = [];
+        if (array_key_exists('mode_vip', $modes)) {
+            $update['comp_mode_vip'] = (bool) $modes['mode_vip'];
+        }
+        if (array_key_exists('mode_premium', $modes)) {
+            $update['comp_mode_premium'] = (bool) $modes['mode_premium'];
+        }
+
+        if (empty($update)) {
+            throw new \Exception('Aucun mode à mettre à jour.');
+        }
+
+        $compagnie->update($update);
+
+        return $this->formaterCompagnie($compagnie->fresh());
+    }
+
+    /**
      * Supprime une compagnie (soft delete)
      */
     public function supprimerCompagnie(int $compagnieId): bool
@@ -491,6 +519,8 @@ class CompagnieService
             'frequence_collecte' => $compagnie->comm_frequence_collecte ?? 'mensuelle',
             'jour_collecte' => $compagnie->comm_jour_collecte,
             'commission_active' => $compagnie->comm_actif ?? true,
+            'mode_vip' => (bool) $compagnie->comp_mode_vip,
+            'mode_premium' => (bool) $compagnie->comp_mode_premium,
             'localisation' => $compagnie->localisation ? [
                 'id' => $compagnie->localisation->pro_id,
                 'nom' => $compagnie->localisation->pro_nom

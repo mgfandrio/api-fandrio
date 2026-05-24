@@ -73,6 +73,8 @@ CREATE TABLE fandrio_app.compagnies (
     comm_frequence_collecte VARCHAR(20) DEFAULT 'mensuelle',
     comm_jour_collecte VARCHAR(20) DEFAULT NULL,
     comm_actif BOOLEAN DEFAULT TRUE,
+    comp_mode_vip BOOLEAN DEFAULT FALSE,
+    comp_mode_premium BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT chk_frequence_collecte CHECK (comm_frequence_collecte IN ('hebdomadaire', 'mensuelle'))
@@ -83,6 +85,8 @@ COMMENT ON COLUMN fandrio_app.compagnies.comp_localisation IS 'ID de la province
 COMMENT ON COLUMN fandrio_app.compagnies.comm_frequence_collecte IS 'Fréquence de collecte des commissions : hebdomadaire ou mensuelle';
 COMMENT ON COLUMN fandrio_app.compagnies.comm_jour_collecte IS 'Jour de collecte (lundi-dimanche pour hebdo, 1-28 pour mensuel)';
 COMMENT ON COLUMN fandrio_app.compagnies.comm_actif IS 'Active/désactive le calcul de commission pour cette compagnie';
+COMMENT ON COLUMN fandrio_app.compagnies.comp_mode_vip IS 'Autorise la compagnie à créer des trajets/voitures de catégorie VIP (activé par le super-admin)';
+COMMENT ON COLUMN fandrio_app.compagnies.comp_mode_premium IS 'Autorise la compagnie à créer des trajets/voitures de catégorie Premium (activé par le super-admin)';
 
 
 -- =============================================================================
@@ -158,6 +162,7 @@ CREATE TABLE fandrio_app.voitures (
     voit_modele VARCHAR(50),
     voit_places INTEGER NOT NULL CHECK (voit_places > 0 AND voit_places <= 100),
     voit_statut INTEGER DEFAULT 1 CHECK (voit_statut IN (1, 2, 3)), -- 1: actif, 2: inactif, 3: supprimé
+    voit_categorie VARCHAR(20) DEFAULT 'classique' CHECK (voit_categorie IN ('classique', 'vip', 'premium')),
     comp_id INTEGER NOT NULL REFERENCES fandrio_app.compagnies(comp_id) ON DELETE CASCADE,
     chauff_id INTEGER REFERENCES fandrio_app.chauffeurs(chauff_id) ON DELETE SET NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -165,6 +170,7 @@ CREATE TABLE fandrio_app.voitures (
 );
 
 COMMENT ON TABLE fandrio_app.voitures IS 'Table des véhicules des compagnies';
+COMMENT ON COLUMN fandrio_app.voitures.voit_categorie IS 'Catégorie du véhicule (classique, vip, premium). Nécessite le mode correspondant activé sur la compagnie.';
 
 
 -- =============================================================================
@@ -193,12 +199,14 @@ CREATE TABLE fandrio_app.trajets (
     traj_duree INTERVAL,
     comp_id INTEGER NOT NULL REFERENCES fandrio_app.compagnies(comp_id) ON DELETE CASCADE,
     traj_statut INTEGER DEFAULT 1 CHECK (traj_statut IN (1, 2)), -- 1: actif, 2: inactif
+    traj_categorie VARCHAR(20) DEFAULT 'classique' CHECK (traj_categorie IN ('classique', 'vip', 'premium')),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CHECK (pro_depart != pro_arrivee)
 );
 
 COMMENT ON TABLE fandrio_app.trajets IS 'Table des trajets proposés par les compagnies';
+COMMENT ON COLUMN fandrio_app.trajets.traj_categorie IS 'Catégorie du trajet (classique, vip, premium). Nécessite le mode correspondant activé sur la compagnie.';
 
 
 -- =============================================================================
@@ -503,6 +511,7 @@ CREATE INDEX idx_voyages_statut ON fandrio_app.voyages(voyage_statut);
 -- Trajets
 CREATE INDEX idx_trajets_compagnie ON fandrio_app.trajets(comp_id);
 CREATE INDEX idx_trajets_provinces ON fandrio_app.trajets(pro_depart, pro_arrivee);
+CREATE INDEX idx_trajets_categorie ON fandrio_app.trajets(traj_categorie);
 
 -- Notifications
 CREATE INDEX idx_notifications_destinataire ON fandrio_app.notifications(notif_destinataire_type, notif_destinataire_id);
@@ -512,6 +521,7 @@ CREATE INDEX idx_paiements_statut ON fandrio_app.paiements(paie_statut);
 
 -- Voitures & Chauffeurs
 CREATE INDEX idx_voitures_statut ON fandrio_app.voitures(voit_statut);
+CREATE INDEX idx_voitures_categorie ON fandrio_app.voitures(voit_categorie);
 CREATE INDEX idx_chauffeurs_statut ON fandrio_app.chauffeurs(chauff_statut);
 
 -- Collectes

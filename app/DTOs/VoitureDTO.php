@@ -4,6 +4,8 @@ namespace App\DTOs;
 
 class VoitureDTO
 {
+    public const CATEGORIES = ['classique', 'vip', 'premium'];
+
     public function __construct(
         public string $voit_matricule,
         public string $voit_marque,
@@ -11,7 +13,8 @@ class VoitureDTO
         public int $voit_places,
         public int $voit_statut,
         public int $comp_id,
-        public int $chauff_id
+        public int $chauff_id,
+        public string $voit_categorie = 'classique'
     ) {}
 
 
@@ -26,6 +29,7 @@ class VoitureDTO
             voit_statut: (int) $donnees['voit_statut'],
             comp_id: (int) $donnees['comp_id'],
             chauff_id: (int) $donnees['chauff_id'],
+            voit_categorie: $donnees['voit_categorie'] ?? 'classique',
         );
     }
 
@@ -40,7 +44,8 @@ class VoitureDTO
             voit_places: isset($donnees['voit_places']) ? (int) $donnees['voit_places'] : 0,
             voit_statut: isset($donnees['voit_statut']) ? (int) $donnees['voit_statut'] : 0,
             comp_id: isset($donnees['comp_id']) ? (int) $donnees['comp_id'] : 0,
-            chauff_id: isset($donnees['chauff_id']) ? (int) $donnees['chauff_id'] : 0
+            chauff_id: isset($donnees['chauff_id']) ? (int) $donnees['chauff_id'] : 0,
+            voit_categorie: $donnees['voit_categorie'] ?? 'classique'
         );
     }
 
@@ -55,7 +60,8 @@ class VoitureDTO
             'voit_places'    => 'required|integer',
             'voit_statut' => 'required|integer',
             'comp_id'       => 'required|integer|exists:compagnies,comp_id',
-            'chauff_id'       => 'required|integer|exists:chauffeurs,chauff_id'
+            'chauff_id'       => 'required|integer|exists:chauffeurs,chauff_id',
+            'voit_categorie' => 'sometimes|string|in:classique,vip,premium'
         ];
     }
 
@@ -70,7 +76,8 @@ class VoitureDTO
             'voit_places'    => 'sometimes|required|integer',
             'voit_statut' => 'sometimes|required|integer',
             'comp_id'       => 'sometimes|required|integer|exists:compagnies,comp_id',
-            'chauff_id'       => 'sometimes|required|integer|exists:chauffeurs,chauff_id'
+            'chauff_id'       => 'sometimes|required|integer|exists:chauffeurs,chauff_id',
+            'voit_categorie' => 'sometimes|string|in:classique,vip,premium'
         ];
     }
 
@@ -85,7 +92,8 @@ class VoitureDTO
             'voit_places'    => $this->voit_places,
             'voit_statut' => $this->voit_statut,
             'comp_id'       => $this->comp_id,
-            'chauff_id'       => $this->chauff_id
+            'chauff_id'       => $this->chauff_id,
+            'voit_categorie' => $this->voit_categorie
         ], function ($valeur) {
             return $valeur !== null && $valeur !== '';
         });

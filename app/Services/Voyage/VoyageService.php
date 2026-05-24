@@ -62,6 +62,9 @@ class VoyageService
                 throw new \Exception('Le nombre de places disponibles ne peut pas dépasser la capacité du véhicule');
             }
 
+            // Cohérence catégorie : la voiture doit être de la même catégorie que le trajet
+            $this->assertCoherenceCategorie($trajet, $voiture);
+
             $voyage = Voyage::create([
                 'voyage_date' => $voyageDTO->voyageDate,
                 'voyage_heure_depart' => $voyageDTO->voyageHeureDepart,
@@ -122,6 +125,12 @@ class VoyageService
                     // Vérifier la capacité
                     if ($voyageDTO->placesDisponibles > $voiture->voit_places) {
                         throw new \Exception("Le nombre de places ({$voyageDTO->placesDisponibles}) dépasse la capacité du véhicule ({$voiture->voit_places})");
+                    }
+
+                    // Cohérence catégorie : trajet et voiture doivent être de la même catégorie
+                    $trajetItem = Trajet::find($voyageDTO->trajId);
+                    if ($trajetItem) {
+                        $this->assertCoherenceCategorie($trajetItem, $voiture);
                     }
 
                     $voyage = Voyage::create([
@@ -651,6 +660,7 @@ class VoyageService
                 'id' => $voyage->trajet->traj_id,
                 'nom' => $voyage->trajet->traj_nom,
                 'tarif' => (float) $voyage->trajet->traj_tarif,
+                'categorie' => $voyage->trajet->traj_categorie ?? 'classique',
                 'province_depart' => $voyage->trajet->provinceDepart->pro_nom,
                 'province_arrivee' => $voyage->trajet->provinceArrivee->pro_nom
             ],
@@ -659,8 +669,10 @@ class VoyageService
                 'matricule' => $voyage->voiture->voit_matricule,
                 'marque' => $voyage->voiture->voit_marque,
                 'modele' => $voyage->voiture->voit_modele,
-                'capacite' => $voyage->voiture->voit_places
-            ]
+                'capacite' => $voyage->voiture->voit_places,
+                'categorie' => $voyage->voiture->voit_categorie ?? 'classique'
+            ],
+            'categorie' => $voyage->voyage_categorie
         ];
     }
 
@@ -688,5 +700,20 @@ class VoyageService
         });
 
         return $formatted;
+    }
+
+    /**
+     * Vérifie que la voiture et le trajet appartiennent à la même catégorie.
+     */
+    private function assertCoherenceCategorie(Trajet $trajet, Voitures $voiture): void
+    {
+        $catTrajet  = $trajet->traj_categorie ?? 'classique';
+        $catVoiture = $voiture->voit_categorie ?? 'classique';
+
+        if ($catTrajet !== $catVoiture) {
+            throw new \Exception(
+                "Incohérence de catégorie : le trajet est « {$catTrajet} » mais la voiture est « {$catVoiture} »."
+            );
+        }
     }
 }

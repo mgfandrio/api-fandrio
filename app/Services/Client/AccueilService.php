@@ -256,6 +256,7 @@ class AccueilService
                 'tarif'           => (float) $trajet->traj_tarif,
                 'distance_km'     => $trajet->traj_km,
                 'duree'           => $trajet->getDureeFormatee(),
+                'categorie'       => $trajet->traj_categorie ?? 'classique',
                 'province_depart' => [
                     'id'  => $trajet->provinceDepart->pro_id,
                     'nom' => $trajet->provinceDepart->pro_nom,

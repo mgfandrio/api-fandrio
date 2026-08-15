@@ -45,6 +45,12 @@ class TrajetService
             // Garde-fou catégorie : la compagnie doit avoir le mode activé
             $this->assertCategorieAutorisee($compagnie, $trajetDTO->trajCategorie);
 
+            // Garde-fou localisation : le départ doit être la ville de la compagnie
+            $this->assertDepartLocalisation($compagnie, $trajetDTO->proDepart);
+
+            // Garde-fou desserte : l'arrivée doit faire partie des provinces desservies
+            $this->assertArriveeDesservie($compagnie, $trajetDTO->proArrivee);
+
             // Vérifier si un trajet similaire existe déjà pour la compagnie
             if ($this->trajetExiste($compagnie->comp_id, $trajetDTO->proDepart, $trajetDTO->proArrivee )) {
                 throw new \Exception('Un trajet avec le même départ et arrivée existe déjà pour votre compagnie');
@@ -144,6 +150,12 @@ class TrajetService
 
             // Garde-fou catégorie
             $this->assertCategorieAutorisee($compagnie, $trajetDTO->trajCategorie);
+
+            // Garde-fou localisation : le départ doit être la ville de la compagnie
+            $this->assertDepartLocalisation($compagnie, $trajetDTO->proDepart);
+
+            // Garde-fou desserte : l'arrivée doit faire partie des provinces desservies
+            $this->assertArriveeDesservie($compagnie, $trajetDTO->proArrivee);
 
             // Si la catégorie change alors que des voyages existent, on bloque
             // pour éviter une incohérence avec les voitures déjà liées.
@@ -254,6 +266,30 @@ class TrajetService
         }
         if ($categorie === 'premium' && !$compagnie->comp_mode_premium) {
             throw new \Exception('Le mode Premium n\'est pas activé pour votre compagnie.');
+        }
+    }
+
+    /**
+     * Vérifie que la province de départ correspond à la localisation de la compagnie.
+     * Une compagnie ne peut créer que des trajets partant de sa propre ville.
+     */
+    private function assertDepartLocalisation(Compagnie $compagnie, int $proDepart): void
+    {
+        if ($compagnie->comp_localisation && (int) $compagnie->comp_localisation !== (int) $proDepart) {
+            throw new \Exception('La province de départ doit correspondre à la localisation de votre compagnie.');
+        }
+    }
+
+    /**
+     * Vérifie que la province d'arrivée fait partie des provinces desservies par la compagnie.
+     * Ne s'applique que si la compagnie a configuré au moins une province desservie.
+     */
+    private function assertArriveeDesservie(Compagnie $compagnie, int $proArrivee): void
+    {
+        $desservies = $compagnie->provincesDesservies->pluck('pro_id')->map(fn($id) => (int) $id)->all();
+
+        if (!empty($desservies) && !in_array((int) $proArrivee, $desservies, true)) {
+            throw new \Exception("La province d'arrivée doit faire partie des provinces desservies par votre compagnie.");
         }
     }
 

@@ -14,6 +14,7 @@ class GestionStatutVoyagesCommand extends Command
     protected $description = 'Met à jour automatiquement les statuts des voyages : en cours, terminé, annulé avec notifications';
 
     private const SEUIL_RESERVATIONS = 5;
+    private const TAUX_COMMISSION = 0.05; // 5%
 
     public function handle(): int
     {
@@ -79,6 +80,25 @@ class GestionStatutVoyagesCommand extends Command
 
         if ($voyagesTermines->count() > 0) {
             $this->info("→ {$voyagesTermines->count()} voyage(s) terminé(s) (≥ " . self::SEUIL_RESERVATIONS . " réservations)");
+        }
+
+        // 3bis. Gel de la commission : chaque billet payé d'un voyage Terminé, pas encore figé.
+        // Étape idempotente et auto-réparatrice (whereNull) : couvre les voyages qui
+        // viennent de passer Terminé ET ceux déjà terminés sans commission figée.
+        $billetsAFiger = Reservation::where('res_statut', 2) // confirmée (payée)
+            ->whereNull('res_commission')
+            ->whereHas('voyage', fn($q) => $q->where('voyage_statut', 3)) // voyage terminé
+            ->get();
+
+        foreach ($billetsAFiger as $res) {
+            $res->update([
+                'res_commission'      => round((float) $res->montant_total * self::TAUX_COMMISSION, 2),
+                'res_commission_taux' => self::TAUX_COMMISSION * 100, // stocké en % (5.00)
+            ]);
+        }
+
+        if ($billetsAFiger->count() > 0) {
+            $this->info("→ {$billetsAFiger->count()} commission(s) de billet figée(s)");
         }
 
         // 4. Programmé/En cours → Annulé : échéance atteinte ET < 5 réservations (mais > 0)

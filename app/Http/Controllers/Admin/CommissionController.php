@@ -34,15 +34,19 @@ class CommissionController extends Controller
             $nbReservations = (int)(clone $reservationsBase)->count();
             $commissionTotale = round($revenuBrut * $this->tauxCommission, 2);
 
-            // ── Commissions par statut (depuis la table commissions) ──
-            $commissionsParStatut = Commission::select('comm_statut', DB::raw('COUNT(*) as nb'), DB::raw('SUM(comm_montant) as total'))
-                ->groupBy('comm_statut')
-                ->get()
-                ->keyBy('comm_statut');
-
-            $montantCalculee = (float)($commissionsParStatut[1]->total ?? 0);
-            $montantFacturee = (float)($commissionsParStatut[2]->total ?? 0);
-            $montantPayee    = (float)($commissionsParStatut[3]->total ?? 0);
+            // ── Statut des commissions (source de vérité : table collectes) ──
+            // 3 buckets mutuellement exclusifs :
+            //   calculee = dû à échoir (en attente, échéance non dépassée)
+            //   facturee = dû en retard (en attente, échéance dépassée)
+            //   payee    = encaissé (collecte confirmée)
+            $montantCalculee = (float) Collecte::where('coll_statut', Collecte::EN_ATTENTE)
+                ->whereDate('coll_date_prevue', '>=', today())
+                ->sum('coll_montant_commission');
+            $montantFacturee = (float) Collecte::where('coll_statut', Collecte::EN_ATTENTE)
+                ->whereDate('coll_date_prevue', '<', today())
+                ->sum('coll_montant_commission');
+            $montantPayee    = (float) Collecte::where('coll_statut', Collecte::CONFIRMEE)
+                ->sum('coll_montant_commission');
 
             // ── Solde par période ──
             $periodes = [
@@ -242,12 +246,13 @@ class CommissionController extends Controller
                     'c.comp_id',
                     'c.comp_nom',
                     'c.comp_statut',
+                    'c.comp_suspendu_commission',
                     'c.comm_frequence_collecte',
                     DB::raw('SUM(r.montant_total) as brut'),
                     DB::raw('COUNT(r.res_id) as nb_reservations'),
                     DB::raw('SUM(r.nb_voyageurs) as billets')
                 )
-                ->groupBy('c.comp_id', 'c.comp_nom', 'c.comp_statut', 'c.comm_frequence_collecte');
+                ->groupBy('c.comp_id', 'c.comp_nom', 'c.comp_statut', 'c.comp_suspendu_commission', 'c.comm_frequence_collecte');
 
             // Filtres
             if ($request->filled('recherche')) {
@@ -256,11 +261,15 @@ class CommissionController extends Controller
             if ($request->filled('frequence')) {
                 $query->where('c.comm_frequence_collecte', $request->frequence);
             }
+            if ($request->boolean('suspendu')) {
+                $query->where('c.comp_suspendu_commission', true);
+            }
 
             $compagnies = $query->orderByDesc('brut')->get()->map(fn($item) => [
                 'comp_id'            => $item->comp_id,
                 'comp_nom'           => $item->comp_nom,
                 'comp_statut'        => $item->comp_statut,
+                'suspendu'           => (bool)$item->comp_suspendu_commission,
                 'frequence_collecte' => $item->comm_frequence_collecte ?? 'mensuelle',
                 'brut'               => (float)$item->brut,
                 'commission'         => round((float)$item->brut * $this->tauxCommission, 2),
@@ -480,6 +489,10 @@ class CommissionController extends Controller
                 'coll_date_confirmation' => now(),
                 'coll_confirme_par'      => $adminId,
             ]);
+
+            // Réactiver la compagnie si elle n'a plus aucune collecte en retard (source unique de vérité)
+            app(\App\Services\Commission\CommissionService::class)
+                ->reactiverCompagnieSiAJour($collecte->comp_id);
 
             // Envoyer une notification aux admins de la compagnie
             $admins = Utilisateur::where('comp_id', $collecte->comp_id)

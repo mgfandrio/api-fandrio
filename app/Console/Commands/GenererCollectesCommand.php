@@ -50,43 +50,52 @@ class GenererCollectesCommand extends Command
                 continue;
             }
 
-            // Calculer les montants pour la période
-            $voyageIds = Voyage::whereHas('trajet', fn($q) => $q->where('comp_id', $compagnie->comp_id))
-                ->pluck('voyage_id');
+            // Billets FACTURABLES : réservations payées de voyages TERMINÉS dont la date
+            // tombe dans la période, commission déjà figée, et pas encore facturées
+            // (coll_id NULL → composition immuable, jamais facturé deux fois).
+            $billables = Reservation::where('res_statut', 2)
+                ->whereNull('coll_id')
+                ->whereNotNull('res_commission')
+                ->whereHas('voyage', function ($q) use ($compagnie, $periodeDebut, $periodeFin) {
+                    $q->where('voyage_statut', 3) // Terminé
+                        ->whereBetween('voyage_date', [$periodeDebut->toDateString(), $periodeFin->toDateString()])
+                        ->whereHas('trajet', fn($t) => $t->where('comp_id', $compagnie->comp_id));
+                })
+                ->get(['res_id', 'montant_total', 'nb_voyageurs', 'res_commission']);
 
-            $reservations = Reservation::whereIn('voyage_id', $voyageIds)
-                ->where('res_statut', 2)
-                ->whereBetween('created_at', [$periodeDebut, $periodeFin->copy()->endOfDay()])
-                ->select(
-                    DB::raw('COALESCE(SUM(montant_total), 0) as brut'),
-                    DB::raw('COALESCE(SUM(nb_voyageurs), 0) as billets'),
-                    DB::raw('COUNT(*) as nb_reservations')
-                )
-                ->first();
-
-            $montantBrut = (float)$reservations->brut;
-            $montantCommission = round($montantBrut * $this->tauxCommission, 2);
-
-            // Ne créer la collecte que s'il y a des réservations
-            if ((int)$reservations->nb_reservations === 0) {
+            // Ne créer la collecte que s'il y a des billets à facturer
+            if ($billables->isEmpty()) {
                 continue;
             }
 
-            Collecte::create([
-                'comp_id'                 => $compagnie->comp_id,
-                'coll_periode_debut'      => $periodeDebut,
-                'coll_periode_fin'        => $periodeFin,
-                'coll_montant_brut'       => $montantBrut,
-                'coll_montant_commission' => $montantCommission,
-                'coll_taux'              => $this->tauxCommission * 100,
-                'coll_nb_reservations'    => (int)$reservations->nb_reservations,
-                'coll_nb_billets'         => (int)$reservations->billets,
-                'coll_statut'            => Collecte::EN_ATTENTE,
-                'coll_date_prevue'       => $today->toDateString(),
-            ]);
+            // Total = SOMME des commissions FIGÉES par billet (réconcilie au centime avec le détail)
+            $montantBrut       = round($billables->sum(fn($r) => (float) $r->montant_total), 2);
+            $montantCommission = round($billables->sum(fn($r) => (float) $r->res_commission), 2);
+            $nbBillets         = (int) $billables->sum(fn($r) => (int) $r->nb_voyageurs);
+            $nbReservations    = $billables->count();
+
+            DB::transaction(function () use ($compagnie, $periodeDebut, $periodeFin, $montantBrut, $montantCommission, $nbReservations, $nbBillets, $today, $billables) {
+                $collecte = Collecte::create([
+                    'comp_id'                 => $compagnie->comp_id,
+                    'coll_periode_debut'      => $periodeDebut,
+                    'coll_periode_fin'        => $periodeFin,
+                    'coll_montant_brut'       => $montantBrut,
+                    'coll_montant_commission' => $montantCommission,
+                    'coll_taux'               => $this->tauxCommission * 100,
+                    'coll_nb_reservations'    => $nbReservations,
+                    'coll_nb_billets'         => $nbBillets,
+                    'coll_statut'             => Collecte::EN_ATTENTE,
+                    'coll_date_prevue'        => $today->toDateString(),
+                    'coll_mode'               => Collecte::MODE_MANUEL,
+                ]);
+
+                // Tamponner les réservations facturées → composition immuable
+                Reservation::whereIn('res_id', $billables->pluck('res_id'))
+                    ->update(['coll_id' => $collecte->coll_id]);
+            });
 
             $nbGenerees++;
-            $this->info("→ Collecte générée pour {$compagnie->comp_nom} ({$periodeDebut->format('d/m/Y')} - {$periodeFin->format('d/m/Y')})");
+            $this->info("→ Collecte pour {$compagnie->comp_nom} ({$periodeDebut->format('d/m/Y')} - {$periodeFin->format('d/m/Y')}) : {$montantCommission} Ar / {$nbReservations} réservation(s)");
         }
 
         if ($nbGenerees === 0) {

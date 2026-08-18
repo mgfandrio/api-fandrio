@@ -37,7 +37,8 @@ class RechercheService
         ->whereRaw('places_disponibles > places_reservees') // Places disponibles
         ->join('fandrio_app.trajets as t', 'voyages.traj_id', '=', 't.traj_id')
         ->join('fandrio_app.compagnies as c', 't.comp_id', '=', 'c.comp_id')
-        ->where('c.comp_statut', 1); // Compagnies actives
+        ->where('c.comp_statut', 1) // Compagnies actives
+        ->where('c.comp_suspendu_commission', false); // Exclure les compagnies suspendues (commission impayée)
 
         // Appliquer les filtres
         $this->appliquerFiltres($query, $criteres);
@@ -189,6 +190,10 @@ class RechercheService
         ->where('voyage_statut', 1)
         ->whereHas('trajet', function($q) use ($provinceArriveeId) {
             $q->where('pro_arrivee', $provinceArriveeId);
+        })
+        ->whereHas('trajet.compagnie', function($q) {
+            $q->where('comp_statut', 1)
+              ->where('comp_suspendu_commission', false); // Exclure compagnies inactives/suspendues
         })
         ->where('voyage_date', '>=', now()->toDateString())
         ->whereRaw('places_disponibles > places_reservees');

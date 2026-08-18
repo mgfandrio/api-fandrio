@@ -75,6 +75,7 @@ CREATE TABLE fandrio_app.compagnies (
     comm_actif BOOLEAN DEFAULT TRUE,
     comp_mode_vip BOOLEAN DEFAULT FALSE,
     comp_mode_premium BOOLEAN DEFAULT FALSE,
+    comp_suspendu_commission BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT chk_frequence_collecte CHECK (comm_frequence_collecte IN ('hebdomadaire', 'mensuelle'))
@@ -87,6 +88,7 @@ COMMENT ON COLUMN fandrio_app.compagnies.comm_jour_collecte IS 'Jour de collecte
 COMMENT ON COLUMN fandrio_app.compagnies.comm_actif IS 'Active/désactive le calcul de commission pour cette compagnie';
 COMMENT ON COLUMN fandrio_app.compagnies.comp_mode_vip IS 'Autorise la compagnie à créer des trajets/voitures de catégorie VIP (activé par le super-admin)';
 COMMENT ON COLUMN fandrio_app.compagnies.comp_mode_premium IS 'Autorise la compagnie à créer des trajets/voitures de catégorie Premium (activé par le super-admin)';
+COMMENT ON COLUMN fandrio_app.compagnies.comp_suspendu_commission IS 'TRUE si la compagnie est suspendue pour commission impayée (voyages cachés de la recherche client)';
 
 
 -- =============================================================================
@@ -293,6 +295,10 @@ CREATE TABLE fandrio_app.reservations (
     res_remb_date TIMESTAMP NULL,
     res_remb_reference VARCHAR(100) NULL,
     res_remb_note TEXT NULL,
+    -- Commission FIGÉE par billet (au passage du voyage en "Terminé") + rattachement à la collecte
+    res_commission DECIMAL(10,2) NULL,
+    res_commission_taux DECIMAL(5,2) NULL,
+    coll_id INTEGER NULL, -- FK ajoutée après la création de la table collectes (voir plus bas)
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CHECK (montant_avance <= montant_total),
@@ -307,6 +313,9 @@ COMMENT ON COLUMN fandrio_app.reservations.res_remb_montant IS 'Montant à rembo
 COMMENT ON COLUMN fandrio_app.reservations.res_remb_date IS 'Date de traitement effectif du remboursement par la compagnie';
 COMMENT ON COLUMN fandrio_app.reservations.res_remb_reference IS 'Référence de la transaction de remboursement (numéro mobile money, etc.)';
 COMMENT ON COLUMN fandrio_app.reservations.res_remb_note IS 'Note libre de la compagnie (ex: motif de refus)';
+COMMENT ON COLUMN fandrio_app.reservations.res_commission IS 'Montant de commission FIGÉ pour ce billet, calculé au passage du voyage en "Terminé"';
+COMMENT ON COLUMN fandrio_app.reservations.res_commission_taux IS 'Taux de commission (%) figé au moment du calcul';
+COMMENT ON COLUMN fandrio_app.reservations.coll_id IS 'Collecte qui a facturé cette réservation (NULL = pas encore facturée). Fige la composition.';
 
 
 -- =============================================================================
@@ -422,10 +431,20 @@ CREATE TABLE fandrio_app.collectes (
     coll_date_prevue DATE NOT NULL,
     coll_date_confirmation TIMESTAMP NULL,
     coll_confirme_par INTEGER NULL REFERENCES fandrio_app.utilisateurs(util_id),
+    -- Suivi du paiement en ligne de la commission (PAPI)
+    coll_papi_transaction_id VARCHAR(100) NULL,
+    coll_paye_le TIMESTAMP NULL,
+    coll_mode VARCHAR(20) NOT NULL DEFAULT 'manuel' CHECK (coll_mode IN ('manuel', 'papi')),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(comp_id, coll_periode_debut, coll_periode_fin)
 );
+
+-- FK reservations.coll_id → collectes (déclarée ici car collectes est créée après reservations)
+ALTER TABLE fandrio_app.reservations
+    ADD CONSTRAINT reservations_coll_id_fkey
+    FOREIGN KEY (coll_id) REFERENCES fandrio_app.collectes(coll_id) ON DELETE SET NULL;
+CREATE INDEX idx_reservations_coll_id ON fandrio_app.reservations(coll_id);
 
 
 -- =============================================================================

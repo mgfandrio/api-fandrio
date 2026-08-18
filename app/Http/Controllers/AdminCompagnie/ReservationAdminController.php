@@ -1015,6 +1015,8 @@ class ReservationAdminController extends Controller
                     'statut_label'       => $c->coll_statut === Collecte::CONFIRMEE ? 'Confirmée' : 'En attente',
                     'date_prevue'        => $c->coll_date_prevue->format('d/m/Y'),
                     'date_confirmation'  => $c->coll_date_confirmation?->format('d/m/Y H:i'),
+                    'payable'            => $c->coll_statut === Collecte::EN_ATTENTE,
+                    'en_retard'          => $c->coll_statut === Collecte::EN_ATTENTE && $c->coll_date_prevue->lt(today()),
                 ]);
 
             // Totaux
@@ -1030,6 +1032,7 @@ class ReservationAdminController extends Controller
                 'statut' => true,
                 'data' => [
                     'config' => $config,
+                    'suspendu' => (bool) $compagnie->comp_suspendu_commission,
                     'prochaine_collecte' => $prochaineCollecte ? [
                         'date_prevue' => $prochaineCollecte->coll_date_prevue->format('d/m/Y'),
                         'montant' => (float)$prochaineCollecte->coll_montant_commission,

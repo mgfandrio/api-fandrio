@@ -33,7 +33,8 @@ class Compagnie extends Model
         'comm_jour_collecte',
         'comm_actif',
         'comp_mode_vip',
-        'comp_mode_premium'
+        'comp_mode_premium',
+        'comp_suspendu_commission'
     ];
 
     protected $casts = [
@@ -41,7 +42,8 @@ class Compagnie extends Model
         'updated_at' => 'datetime',
         'comm_actif'  => 'boolean',
         'comp_mode_vip' => 'boolean',
-        'comp_mode_premium' => 'boolean'
+        'comp_mode_premium' => 'boolean',
+        'comp_suspendu_commission' => 'boolean'
     ];
 
     /**

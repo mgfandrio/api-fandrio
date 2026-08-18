@@ -24,6 +24,9 @@ class Kernel extends ConsoleKernel
 
         // Génération automatique des collectes de commission (chaque jour à 06:00)
         $schedule->command('commissions:generer-collectes')->dailyAt('06:00');
+
+        // Suspension des compagnies à commission impayée (> délai de grâce) + réactivation (07:00)
+        $schedule->command('commissions:suspendre-impayees')->dailyAt('07:00');
     }
 
     /**

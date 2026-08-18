@@ -142,7 +142,8 @@ class AccueilService
         $slot = $this->getRotationSlot();
 
         $query = Compagnie::with(['localisation'])
-            ->where('comp_statut', 1);
+            ->where('comp_statut', 1)
+            ->where('comp_suspendu_commission', false); // Exclure compagnies suspendues (commission impayée)
 
         if ($provinceProche) {
             // Compagnies localisées dans la province du client en premier,
@@ -204,6 +205,7 @@ class AccueilService
             ->join('fandrio_app.trajets as t', 'voyages.traj_id', '=', 't.traj_id')
             ->join('fandrio_app.compagnies as c', 't.comp_id', '=', 'c.comp_id')
             ->where('c.comp_statut', 1)
+            ->where('c.comp_suspendu_commission', false) // Exclure compagnies suspendues (commission impayée)
             ->select('voyages.*');
 
         if ($provinceProche) {

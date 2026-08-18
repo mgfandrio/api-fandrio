@@ -24,6 +24,9 @@ class Collecte extends Model
         'coll_date_prevue',
         'coll_date_confirmation',
         'coll_confirme_par',
+        'coll_papi_transaction_id',
+        'coll_paye_le',
+        'coll_mode',
     ];
 
     protected $casts = [
@@ -37,15 +40,37 @@ class Collecte extends Model
         'coll_nb_reservations'   => 'integer',
         'coll_nb_billets'        => 'integer',
         'coll_statut'            => 'integer',
+        'coll_paye_le'           => 'datetime',
     ];
 
     // Statuts
     const EN_ATTENTE = 1;
     const CONFIRMEE  = 2;
 
+    // Modes de règlement
+    const MODE_MANUEL = 'manuel';
+    const MODE_PAPI   = 'papi';
+
     public function compagnie()
     {
         return $this->belongsTo(Compagnie::class, 'comp_id', 'comp_id');
+    }
+
+    /**
+     * Réservations facturées par cette collecte (composition figée via coll_id)
+     */
+    public function reservations()
+    {
+        return $this->hasMany(\App\Models\Reservation\Reservation::class, 'coll_id', 'coll_id');
+    }
+
+    /**
+     * Collecte en retard : échéance dépassée et toujours en attente
+     */
+    public function scopeEnRetard($query)
+    {
+        return $query->where('coll_statut', self::EN_ATTENTE)
+                     ->where('coll_date_prevue', '<', today());
     }
 
     public function confirmePar()

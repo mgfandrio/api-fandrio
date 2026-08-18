@@ -31,4 +31,11 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    // PAPI.mg — paiement mobile money (encaissement des commissions par Fandrio)
+    'papi' => [
+        'base_url'       => env('PAPI_BASE_URL', 'https://app.papi.mg'),
+        'api_key'        => env('PAPI_API_KEY'),
+        'webhook_secret' => env('PAPI_WEBHOOK_SECRET'),
+    ],
+
 ];

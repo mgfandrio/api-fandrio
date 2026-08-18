@@ -25,8 +25,13 @@ use App\Http\Controllers\Voiture\SiegeController;
 use App\Http\Controllers\Voiture\PlanSiegeController;
 use App\Http\Controllers\AdminCompagnie\ReservationAdminController;
 use App\Http\Controllers\AdminCompagnie\RemboursementController;
+use App\Http\Controllers\AdminCompagnie\CommissionPaiementController;
+use App\Http\Controllers\Webhook\PapiWebhookController;
 use App\Http\Controllers\Notification\NotificationController;
 use Illuminate\Support\Facades\Route;
+
+// Webhook PAPI (public, serveur-à-serveur, hors api.key/auth — sécurisé par signature)
+Route::post('/papi/webhook/commission', [PapiWebhookController::class, 'commission']);
 
 // Routes publiques (nécessitent seulement la clé API)
 Route::middleware(['api.key'])->group(function () {
@@ -295,6 +300,11 @@ Route::middleware(['api.key', 'auth:api', 'role:2'])->prefix('adminCompagnie')->
         Route::post('/{resId}/embarquer', [ReservationAdminController::class, 'embarquer']);
         Route::get('/portefeuille', [ReservationAdminController::class, 'portefeuille']);
         Route::get('/ma-collecte', [ReservationAdminController::class, 'maCollecte']);
+    });
+
+    // Paiement en ligne des commissions (collectes) via PAPI
+    Route::prefix('commissions')->group(function () {
+        Route::post('/collectes/{collecteId}/payer', [CommissionPaiementController::class, 'payer']);
     });
 
     // Gestion des remboursements clients

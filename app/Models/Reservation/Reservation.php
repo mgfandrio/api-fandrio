@@ -33,6 +33,9 @@ class Reservation extends Model
         'res_remb_date',
         'res_remb_reference',
         'res_remb_note',
+        'res_commission',
+        'res_commission_taux',
+        'coll_id',
     ];
 
     /**
@@ -49,6 +52,9 @@ class Reservation extends Model
         'res_remb_statut' => 'integer',
         'res_remb_montant' => 'decimal:2',
         'res_remb_date' => 'datetime',
+        'res_commission' => 'decimal:2',
+        'res_commission_taux' => 'decimal:2',
+        'coll_id' => 'integer',
     ];
 
     /**
@@ -65,6 +71,14 @@ class Reservation extends Model
     public function voyage()
     {
         return $this->belongsTo(Voyage::class, 'voyage_id', 'voyage_id');
+    }
+
+    /**
+     * Relation avec la collecte qui a facturé cette réservation
+     */
+    public function collecte()
+    {
+        return $this->belongsTo(\App\Models\Commissions\Collecte::class, 'coll_id', 'coll_id');
     }
 
     /**

@@ -101,7 +101,11 @@ class CompagnieController extends Controller
                 'comp_localisation' => 'required|integer|exists:provinces,pro_id',
                 'comm_frequence_collecte' => 'sometimes|string|in:hebdomadaire,mensuelle',
                 'comm_jour_collecte' => 'sometimes|nullable|string',
-                
+                // PAPI (super-admin uniquement)
+                'papi_api_key' => 'sometimes|nullable|string|max:500',
+                'papi_webhook_secret' => 'sometimes|nullable|string|max:500',
+                'papi_actif' => 'sometimes|boolean',
+
                 // Données admin compagnie
                 'admin_nom' => 'required|string|max:100',
                 'admin_prenom' => 'required|string|max:100',
@@ -176,7 +180,11 @@ class CompagnieController extends Controller
                 'provinces_desservies.*' => 'integer|exists:provinces,pro_id',
                 'modes_paiement' => 'sometimes|array',
                 'comm_frequence_collecte' => 'sometimes|string|in:hebdomadaire,mensuelle',
-                'comm_jour_collecte' => 'sometimes|nullable|string'
+                'comm_jour_collecte' => 'sometimes|nullable|string',
+                // PAPI (super-admin uniquement) — champ vide = on garde la valeur existante
+                'papi_api_key' => 'sometimes|nullable|string|max:500',
+                'papi_webhook_secret' => 'sometimes|nullable|string|max:500',
+                'papi_actif' => 'sometimes|boolean'
             ]);
 
             $compagnieDTO = CompagnieDTO::fromRequest($request->all());

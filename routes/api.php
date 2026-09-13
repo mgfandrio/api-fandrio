@@ -30,8 +30,9 @@ use App\Http\Controllers\Webhook\PapiWebhookController;
 use App\Http\Controllers\Notification\NotificationController;
 use Illuminate\Support\Facades\Route;
 
-// Webhook PAPI (public, serveur-à-serveur, hors api.key/auth — sécurisé par signature)
+// Webhooks PAPI (publics, serveur-à-serveur, hors api.key/auth — sécurisés par signature)
 Route::post('/papi/webhook/commission', [PapiWebhookController::class, 'commission']);
+Route::post('/papi/webhook/reservation', [PapiWebhookController::class, 'reservation']);
 
 // Routes publiques (nécessitent seulement la clé API)
 Route::middleware(['api.key'])->group(function () {
@@ -140,6 +141,7 @@ Route::middleware(['api.key', 'auth:api'])->group(function () {
         Route::get('/dashboard', [\App\Http\Controllers\Client\ReservationController::class, 'dashboard']);
         Route::post('/', [\App\Http\Controllers\Client\ReservationController::class, 'store']);
         Route::post('/{id}/confirm', [\App\Http\Controllers\Client\ReservationController::class, 'confirm']);
+        Route::post('/{id}/payer', [\App\Http\Controllers\Client\ReservationPaiementController::class, 'payer']);
         Route::post('/{id}/cancel', [\App\Http\Controllers\Client\ReservationController::class, 'cancel']);
         Route::get('/{id}/invoice', [\App\Http\Controllers\Client\ReservationController::class, 'getInvoice']);
     });

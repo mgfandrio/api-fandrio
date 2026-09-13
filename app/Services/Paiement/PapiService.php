@@ -39,13 +39,15 @@ class PapiService
      * TODO(PAPI): confirmer le chemin et les noms de champs. Endpoint connu (doc) :
      *   POST {base_url}/dashboard/api/payment-links
      */
-    public function creerLienPaiement(array $params): array
+    public function creerLienPaiement(array $params, ?string $apiKey = null): array
     {
-        if (!$this->estConfigure()) {
-            throw new \RuntimeException('PAPI non configuré (PAPI_API_KEY manquant).');
+        // Clé par compagnie (flux billet) si fournie, sinon clé Fandrio (flux commission).
+        $cle = $apiKey ?: $this->apiKey;
+        if (empty($cle)) {
+            throw new \RuntimeException('PAPI non configuré (clé API manquante).');
         }
 
-        $response = Http::withToken($this->apiKey)
+        $response = Http::withToken($cle)
             ->acceptJson()
             ->post($this->baseUrl . '/dashboard/api/payment-links', [
                 // TODO(PAPI): ajuster les clés selon la doc réelle
@@ -83,9 +85,19 @@ class PapiService
      */
     public function verifierSignatureWebhook(Request $request): bool
     {
+        // Flux commission : secret Fandrio.
+        return $this->verifierSignatureAvecSecret($request, $this->webhookSecret);
+    }
+
+    /**
+     * Vérifie la signature d'un webhook avec un secret donné (ex. secret d'une compagnie
+     * pour le flux billet). Voir verifierSignatureWebhook pour le TODO(PAPI).
+     */
+    public function verifierSignatureAvecSecret(Request $request, ?string $secret): bool
+    {
         // Aucun secret configuré : refus en prod, toléré en local pour les tests.
-        if (empty($this->webhookSecret)) {
-            Log::warning('PAPI webhook : PAPI_WEBHOOK_SECRET non configuré.');
+        if (empty($secret)) {
+            Log::warning('PAPI webhook : secret de signature non configuré.');
             return app()->environment('local');
         }
 
@@ -94,7 +106,7 @@ class PapiService
             return false;
         }
 
-        $calculee = hash_hmac('sha256', $request->getContent(), $this->webhookSecret);
+        $calculee = hash_hmac('sha256', $request->getContent(), $secret);
 
         return hash_equals($calculee, (string) $signatureRecue);
     }

@@ -76,6 +76,10 @@ CREATE TABLE fandrio_app.compagnies (
     comp_mode_vip BOOLEAN DEFAULT FALSE,
     comp_mode_premium BOOLEAN DEFAULT FALSE,
     comp_suspendu_commission BOOLEAN NOT NULL DEFAULT FALSE,
+    -- Identifiants PAPI de la compagnie (flux billet). Chiffrés au niveau applicatif, jamais exposés par l'API.
+    comp_papi_api_key TEXT NULL,
+    comp_papi_webhook_secret TEXT NULL,
+    comp_papi_actif BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT chk_frequence_collecte CHECK (comm_frequence_collecte IN ('hebdomadaire', 'mensuelle'))
@@ -89,6 +93,9 @@ COMMENT ON COLUMN fandrio_app.compagnies.comm_actif IS 'Active/désactive le cal
 COMMENT ON COLUMN fandrio_app.compagnies.comp_mode_vip IS 'Autorise la compagnie à créer des trajets/voitures de catégorie VIP (activé par le super-admin)';
 COMMENT ON COLUMN fandrio_app.compagnies.comp_mode_premium IS 'Autorise la compagnie à créer des trajets/voitures de catégorie Premium (activé par le super-admin)';
 COMMENT ON COLUMN fandrio_app.compagnies.comp_suspendu_commission IS 'TRUE si la compagnie est suspendue pour commission impayée (voyages cachés de la recherche client)';
+COMMENT ON COLUMN fandrio_app.compagnies.comp_papi_api_key IS 'Clé API PAPI de la compagnie (chiffrée au niveau applicatif). Jamais exposée par l''API.';
+COMMENT ON COLUMN fandrio_app.compagnies.comp_papi_webhook_secret IS 'Secret de signature des webhooks PAPI de la compagnie (chiffré). Nullable.';
+COMMENT ON COLUMN fandrio_app.compagnies.comp_papi_actif IS 'Active le paiement en ligne PAPI pour cette compagnie (géré par le super-admin).';
 
 
 -- =============================================================================

@@ -325,6 +325,7 @@ class RechercheService
                 'nom' => $compagnie->comp_nom,
                 'logo' => $compagnie->comp_logo,
                 'note' => null, // À implémenter avec un système de notation
+                'papi_actif' => (bool) $compagnie->comp_papi_actif, // paiement en ligne disponible ?
                 'modes_paiement' => $compagnie->modesPaiement->map(function($mode) {
                     return [
                         'type_paie_id' => $mode->type_paie_id,

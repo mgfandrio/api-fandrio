@@ -34,7 +34,10 @@ class Compagnie extends Model
         'comm_actif',
         'comp_mode_vip',
         'comp_mode_premium',
-        'comp_suspendu_commission'
+        'comp_suspendu_commission',
+        'comp_papi_api_key',
+        'comp_papi_webhook_secret',
+        'comp_papi_actif'
     ];
 
     protected $casts = [
@@ -43,7 +46,19 @@ class Compagnie extends Model
         'comm_actif'  => 'boolean',
         'comp_mode_vip' => 'boolean',
         'comp_mode_premium' => 'boolean',
-        'comp_suspendu_commission' => 'boolean'
+        'comp_suspendu_commission' => 'boolean',
+        // Chiffrés au repos (APP_KEY) — jamais exposés par l'API
+        'comp_papi_api_key' => 'encrypted',
+        'comp_papi_webhook_secret' => 'encrypted',
+        'comp_papi_actif' => 'boolean'
+    ];
+
+    /**
+     * Champs sensibles à ne jamais sérialiser dans les réponses API.
+     */
+    protected $hidden = [
+        'comp_papi_api_key',
+        'comp_papi_webhook_secret',
     ];
 
     /**

@@ -45,6 +45,10 @@ class CompagnieService
                 'comp_statut' => 1, // Actif par défaut
                 'comm_frequence_collecte' => $compagnieDTO->commFrequenceCollecte ?? 'mensuelle',
                 'comm_jour_collecte' => $compagnieDTO->commJourCollecte,
+                // Identifiants PAPI (chiffrés par le cast du modèle) — null si non fournis
+                'comp_papi_api_key' => $compagnieDTO->papiApiKey ?: null,
+                'comp_papi_webhook_secret' => $compagnieDTO->papiWebhookSecret ?: null,
+                'comp_papi_actif' => (bool) ($compagnieDTO->papiActif ?? false),
             ]);
 
             // Créer l'administrateur de la compagnie
@@ -266,6 +270,17 @@ class CompagnieService
 
             if ($compagnieDTO->commJourCollecte !== null) {
                 $updateData['comm_jour_collecte'] = $compagnieDTO->commJourCollecte;
+            }
+
+            // PAPI : « champ vide = on garde la valeur existante » (jamais écrasée par du vide)
+            if (!empty($compagnieDTO->papiApiKey)) {
+                $updateData['comp_papi_api_key'] = $compagnieDTO->papiApiKey;
+            }
+            if (!empty($compagnieDTO->papiWebhookSecret)) {
+                $updateData['comp_papi_webhook_secret'] = $compagnieDTO->papiWebhookSecret;
+            }
+            if ($compagnieDTO->papiActif !== null) {
+                $updateData['comp_papi_actif'] = $compagnieDTO->papiActif;
             }
 
             $compagnie->update($updateData);
@@ -521,6 +536,9 @@ class CompagnieService
             'commission_active' => $compagnie->comm_actif ?? true,
             'mode_vip' => (bool) $compagnie->comp_mode_vip,
             'mode_premium' => (bool) $compagnie->comp_mode_premium,
+            // PAPI : on n'expose JAMAIS la clé, seulement l'état
+            'papi_configure' => !empty($compagnie->getRawOriginal('comp_papi_api_key')),
+            'papi_actif' => (bool) $compagnie->comp_papi_actif,
             'localisation' => $compagnie->localisation ? [
                 'id' => $compagnie->localisation->pro_id,
                 'nom' => $compagnie->localisation->pro_nom

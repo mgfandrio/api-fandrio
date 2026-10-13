@@ -1,0 +1,128 @@
+# =============================================================================
+# FANDRIO API — Docker Compose PRODUCTION
+# =============================================================================
+# Usage :
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Différences avec docker-compose.yml (dev) :
+#   - Code embarqué dans les images (pas de bind-mount `.:/var/www`)
+#     => tout changement de code nécessite `--build`.
+#   - APP_ENV=production, APP_DEBUG=false : config/routes/events mis en cache
+#     au démarrage (cf. docker/php/entrypoint.sh), opcache sans revalidation.
+#   - PHP-FPM dimensionné via PHP_FPM_* (cf. docker/php/fpm-pool.conf).
+#   - PostgreSQL non exposé sur l'hôte, pas de pgAdmin.
+#   - Pas de conteneur "voyagestatus" : le scheduler exécute déjà
+#     voyages:gestion-statuts toutes les 5 min (sinon double exécution).
+#
+# Variables à définir dans .env pour la prod (en plus de l'existant) :
+#   APP_KEY, JWT_SECRET, API_KEY, DB_PASSWORD (fort), REVERB_APP_*,
+#   REVERB_PUBLIC_HOST / REVERB_PUBLIC_PORT / REVERB_PUBLIC_SCHEME
+#     (adresse WebSocket joignable par l'app mobile, ex. ws.fandrio.mg / 443 / https)
+#   PHP_FPM_MAX_CHILDREN (optionnel, défaut 30 — voir fpm-pool.conf)
+# =============================================================================
+
+x-app-env: &app-env
+  APP_ENV: production
+  APP_DEBUG: "false"
+  LOG_CHANNEL: daily
+  LOG_LEVEL: ${LOG_LEVEL:-warning}
+  DB_HOST: postgres
+  DB_PORT: 5432
+  REVERB_HOST: reverb
+  REVERB_APP_ID: ${REVERB_APP_ID}
+  REVERB_APP_KEY: ${REVERB_APP_KEY}
+  REVERB_APP_SECRET: ${REVERB_APP_SECRET}
+  REVERB_PORT: 8080
+  REVERB_SCHEME: http
+  BROADCAST_DRIVER: ${BROADCAST_DRIVER:-reverb}
+  PHP_FPM_MAX_CHILDREN: ${PHP_FPM_MAX_CHILDREN:-30}
+  PHP_FPM_START_SERVERS: ${PHP_FPM_START_SERVERS:-8}
+  PHP_FPM_MIN_SPARE_SERVERS: ${PHP_FPM_MIN_SPARE_SERVERS:-4}
+  PHP_FPM_MAX_SPARE_SERVERS: ${PHP_FPM_MAX_SPARE_SERVERS:-12}
+
+x-app-base: &app-base
+  build:
+    context: .
+    dockerfile: Dockerfile
+    target: app
+  image: fandrio-api:latest
+  restart: unless-stopped
+  working_dir: /var/www
+  env_file:
+    - .env
+  environment:
+    <<: *app-env
+  volumes:
+    # storage/ partagé entre app, reverb et scheduler : le cache et le
+    # rate-limiter sont actuellement en driver "file" (à migrer vers Redis).
+    - storage:/var/www/storage
+  depends_on:
+    postgres:
+      condition: service_healthy
+  networks:
+    - fandrio
+
+services:
+  # ── PHP-FPM (Laravel app) ──────────────────────────────────────────
+  app:
+    <<: *app-base
+    container_name: fandrio_app
+
+  # ── Nginx (fichiers publics embarqués, étape "web" du Dockerfile) ──
+  nginx:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: web
+    image: fandrio-web:latest
+    container_name: fandrio_nginx
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-18010}:80"
+    depends_on:
+      - app
+    networks:
+      - fandrio
+
+  # ── PostgreSQL (non exposé sur l'hôte) ─────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    container_name: fandrio_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-fandrio}
+      POSTGRES_USER: ${DB_USERNAME:-fandrio}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD doit être défini en production}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d
+      - ./database/SQLRequetes:/docker-entrypoint-initdb.d/sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-fandrio}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - fandrio
+
+  # ── Laravel Reverb (WebSockets) ────────────────────────────────────
+  reverb:
+    <<: *app-base
+    container_name: fandrio_reverb
+    command: ["php", "artisan", "reverb:start", "--host=0.0.0.0", "--port=8080"]
+    ports:
+      - "${REVERB_PORT_FORWARD:-18080}:8080"
+
+  # ── Scheduler (cron tasks) ─────────────────────────────────────────
+  scheduler:
+    <<: *app-base
+    container_name: fandrio_scheduler
+    command: ["php", "artisan", "schedule:work"]
+
+volumes:
+  pgdata:
+  storage:
+
+networks:
+  fandrio:
+    driver: bridge

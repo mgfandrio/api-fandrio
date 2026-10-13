@@ -211,14 +211,14 @@ class SiegeController extends Controller
             }
 
             // Construire l'URL WebSocket Reverb
-            $scheme = env('REVERB_SCHEME', 'ws');
-            $host = env('REVERB_HOST', 'localhost');
-            $port = env('REVERB_PORT', 8080);
+            $scheme = config('api.websocket.scheme');
+            $host = config('api.websocket.host');
+            $port = config('api.websocket.port');
             $wsUrl = $scheme . '://' . $host . ':' . $port;
 
             $config = [
                 'ws_url' => $wsUrl,
-                'reverb_key' => env('REVERB_APP_KEY'),
+                'reverb_key' => config('api.websocket.key'),
                 'voyage_id' => $voyageId,
                 'utilisateur_id' => $utilisateur->util_id,
                 'token' => $this->generateWsToken($voyageId, $utilisateur->util_id),

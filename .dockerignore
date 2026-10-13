@@ -13,5 +13,8 @@ phpunit.xml
 .env.backup
 docker
 !docker/php/entrypoint.sh
+!docker/php/fpm-pool.conf
+!docker/php/php-prod.ini
+!docker/nginx/default.conf
 docker-compose.yml
 README.md

@@ -35,4 +35,25 @@ return [
         // Require API key for all routes
         'require_key' => env('API_REQUIRE_KEY', true),
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | WebSocket (Reverb) — configuration exposée aux clients
+    |--------------------------------------------------------------------------
+    |
+    | Lue via config() et non env() : env() renvoie null une fois
+    | `php artisan config:cache` exécuté (production).
+    |
+    | REVERB_PUBLIC_* : adresse joignable par l'app mobile / le backoffice.
+    | Sous Docker, REVERB_HOST vaut "reverb" (nom interne du conteneur,
+    | utilisé par Laravel pour publier) : il faut alors définir ces variables.
+    |
+    */
+
+    'websocket' => [
+        'scheme' => env('REVERB_PUBLIC_SCHEME', env('REVERB_SCHEME', 'ws')),
+        'host'   => env('REVERB_PUBLIC_HOST', env('REVERB_HOST', 'localhost')),
+        'port'   => env('REVERB_PUBLIC_PORT', env('REVERB_PORT', 8080)),
+        'key'    => env('REVERB_APP_KEY'),
+    ],
 ];

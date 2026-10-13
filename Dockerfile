@@ -1,4 +1,17 @@
-FROM php:8.2-fpm-alpine
+# =============================================================================
+# Étape "web" : nginx + fichiers publics (utilisée par docker-compose.prod.yml,
+# où le code n'est plus monté en volume). Placée AVANT l'étape app pour que
+# `docker build` sans --target produise toujours l'image PHP (dev inchangé).
+# =============================================================================
+FROM nginx:alpine AS web
+
+COPY docker/nginx/default.conf /etc/nginx/conf.d/default.conf
+COPY public /var/www/public
+
+# =============================================================================
+# Étape "app" : PHP-FPM (Laravel) — cible par défaut
+# =============================================================================
+FROM php:8.2-fpm-alpine AS app
 
 # Install system dependencies
 RUN apk add --no-cache \
@@ -27,6 +40,14 @@ RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
     opcache \
     gd \
     pcntl
+
+# PHP-FPM : pool dimensionné (l'image officielle plafonne à 5 workers)
+# Valeurs surchargeables via l'environnement du conteneur.
+ENV PHP_FPM_MAX_CHILDREN=30     PHP_FPM_START_SERVERS=8     PHP_FPM_MIN_SPARE_SERVERS=4     PHP_FPM_MAX_SPARE_SERVERS=12
+COPY docker/php/fpm-pool.conf /usr/local/etc/php-fpm.d/zz-fandrio.conf
+
+# php.ini de production (remplacé par docker/php/php.ini en dev via volume)
+COPY docker/php/php-prod.ini /usr/local/etc/php/conf.d/custom.ini
 
 # Install Composer
 RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer

@@ -10,7 +10,9 @@
 #   - APP_ENV=production, APP_DEBUG=false : config/routes/events mis en cache
 #     au démarrage (cf. docker/php/entrypoint.sh), opcache sans revalidation.
 #   - PHP-FPM dimensionné via PHP_FPM_* (cf. docker/php/fpm-pool.conf).
-#   - PostgreSQL non exposé sur l'hôte, pas de pgAdmin.
+#   - PostgreSQL et Redis non exposés sur l'hôte, pas de pgAdmin.
+#   - Cache, rate-limiter et queue dans Redis ; conteneur "queue" dédié
+#     aux push notifications et broadcasts WebSocket.
 #   - Pas de conteneur "voyagestatus" : le scheduler exécute déjà
 #     voyages:gestion-statuts toutes les 5 min (sinon double exécution).
 #
@@ -35,6 +37,11 @@ x-app-env: &app-env
   REVERB_PORT: 8080
   REVERB_SCHEME: http
   BROADCAST_DRIVER: ${BROADCAST_DRIVER:-reverb}
+  REDIS_HOST: redis
+  REDIS_PORT: 6379
+  REDIS_PASSWORD: null
+  CACHE_DRIVER: redis
+  QUEUE_CONNECTION: redis
   PHP_FPM_MAX_CHILDREN: ${PHP_FPM_MAX_CHILDREN:-30}
   PHP_FPM_START_SERVERS: ${PHP_FPM_START_SERVERS:-8}
   PHP_FPM_MIN_SPARE_SERVERS: ${PHP_FPM_MIN_SPARE_SERVERS:-4}
@@ -53,11 +60,12 @@ x-app-base: &app-base
   environment:
     <<: *app-env
   volumes:
-    # storage/ partagé entre app, reverb et scheduler : le cache et le
-    # rate-limiter sont actuellement en driver "file" (à migrer vers Redis).
+    # storage/ partagé entre les conteneurs PHP (logs, fichiers)
     - storage:/var/www/storage
   depends_on:
     postgres:
+      condition: service_healthy
+    redis:
       condition: service_healthy
   networks:
     - fandrio
@@ -119,9 +127,38 @@ services:
     container_name: fandrio_scheduler
     command: ["php", "artisan", "schedule:work"]
 
+  # ── Queue worker (push notifications, broadcasts WebSocket) ──────
+  # --max-time : le worker redémarre toutes les heures (mémoire saine).
+  # Après un déploiement : `docker compose -f docker-compose.prod.yml up -d --build`
+  # recrée le conteneur ; sinon `php artisan queue:restart`.
+  # Montée en charge : `--scale queue=3` (retirer container_name d'abord).
+  queue:
+    <<: *app-base
+    container_name: fandrio_queue
+    command: ["php", "artisan", "queue:work", "redis", "--tries=3", "--timeout=60", "--sleep=1", "--max-time=3600"]
+
+  # ── Redis (cache, rate-limiter, blacklist JWT, queue) ──────────────
+  # appendonly : les jobs en attente survivent à un redémarrage.
+  # Pas de maxmemory/éviction : des jobs de queue ne doivent jamais être évincés.
+  redis:
+    image: redis:7-alpine
+    container_name: fandrio_redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - fandrio
+
 volumes:
   pgdata:
   storage:
+  redisdata:
 
 networks:
   fandrio:

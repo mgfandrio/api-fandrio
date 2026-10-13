@@ -14,6 +14,7 @@ SET search_path TO fandrio_app, public;
 -- =============================================================================
 -- SUPPRESSION DES TABLES EXISTANTES (ordre inverse des dépendances)
 -- =============================================================================
+DROP TABLE IF EXISTS fandrio_app.failed_jobs CASCADE;
 DROP TABLE IF EXISTS fandrio_app.sieges_reserves CASCADE;
 DROP TABLE IF EXISTS fandrio_app.plan_sieges CASCADE;
 DROP TABLE IF EXISTS fandrio_app.audit_places CASCADE;
@@ -500,6 +501,23 @@ CREATE TABLE fandrio_app.sieges_reserves (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(voyage_id, siege_numero)
+);
+
+
+-- =============================================================================
+-- 22. TABLE FAILED_JOBS (Jobs de queue Laravel en échec)
+-- =============================================================================
+-- Utilisée par la queue Laravel (driver "database-uuids", config/queue.php) :
+-- push notifications et broadcasts WebSocket ayant épuisé leurs tentatives.
+-- Consultation : php artisan queue:failed / relance : php artisan queue:retry all
+CREATE TABLE fandrio_app.failed_jobs (
+    id BIGSERIAL PRIMARY KEY,
+    uuid VARCHAR(255) NOT NULL UNIQUE,
+    connection TEXT NOT NULL,
+    queue TEXT NOT NULL,
+    payload TEXT NOT NULL,
+    exception TEXT NOT NULL,
+    failed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 

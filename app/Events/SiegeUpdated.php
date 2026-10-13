@@ -16,6 +16,20 @@ class SiegeUpdated implements ShouldBroadcast
     public ?int $utilisateurId;
     public array $data;
 
+    /**
+     * Diffusé via la queue, et seulement une fois la transaction validée :
+     * pas d'appel HTTP vers Reverb pendant que des lignes sont verrouillées,
+     * et pas de "siège réservé" diffusé pour une transaction annulée.
+     * (Sans effet avec QUEUE_CONNECTION=sync : diffusion immédiate.)
+     */
+    public $afterCommit = true;
+
+    /** Tentatives si Reverb est momentanément injoignable (ex. redémarrage) */
+    public $tries = 3;
+
+    /** Délai (s) avant chaque nouvelle tentative */
+    public $backoff = [2, 5];
+
     public function __construct(int $voyageId, string $siegeNumero, string $action, ?int $utilisateurId, array $data)
     {
         $this->voyageId = $voyageId;

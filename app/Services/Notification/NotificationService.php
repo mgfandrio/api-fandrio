@@ -2,10 +2,9 @@
 
 namespace App\Services\Notification;
 
+use App\Jobs\EnvoyerPushNotification;
 use App\Models\Notifications\Notification;
 use App\Models\Utilisateurs\Utilisateur;
-use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
 
 class NotificationService
 {
@@ -24,8 +23,15 @@ class NotificationService
             'res_id' => $data['res_id'] ?? null,
         ]);
 
-        // Envoyer la push notification
-        self::envoyerPush($data['destinataire_id'], $data['titre'], $data['message'], $data);
+        // Envoyer la push notification en arrière-plan (queue), une fois la
+        // transaction en cours validée : jamais d'appel Expo pendant la requête.
+        EnvoyerPushNotification::dispatch(
+            $notification->notif_id,
+            $data['destinataire_id'],
+            $data['titre'],
+            $data['message'],
+            $data
+        )->afterCommit();
 
         return $notification;
     }
@@ -201,43 +207,5 @@ class NotificationService
             'message' => "Votre demande de remboursement pour le voyage {$voyageInfo} a été refusée. Motif : {$motif}. Pour plus d'informations, contactez la compagnie.",
             'res_id' => $resId,
         ]);
-    }
-    /**
-     * Envoyer la push notification via Expo Push API
-     */
-    private static function envoyerPush(int $utilisateurId, string $titre, string $message, array $data = []): void
-    {
-        try {
-            $user = Utilisateur::find($utilisateurId);
-            if (!$user || !$user->push_token) {
-                return;
-            }
-
-            $token = $user->push_token;
-            if (!str_starts_with($token, 'ExponentPushToken[')) {
-                return;
-            }
-
-            $response = Http::post('https://exp.host/--/api/v2/push/send', [
-                'to' => $token,
-                'title' => $titre,
-                'body' => $message,
-                'sound' => 'default',
-                'data' => [
-                    'type' => $data['type'] ?? null,
-                    'res_id' => $data['res_id'] ?? null,
-                ],
-            ]);
-
-            if ($response->successful()) {
-                Notification::where('notif_destinataire_id', $utilisateurId)
-                    ->where('notif_statut', 1)
-                    ->latest('notif_id')
-                    ->first()
-                    ?->update(['notif_statut' => 2]);
-            }
-        } catch (\Exception $e) {
-            Log::warning('Push notification failed: ' . $e->getMessage());
-        }
     }
 }

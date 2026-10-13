@@ -47,7 +47,10 @@ class PapiService
             throw new \RuntimeException('PAPI non configuré (clé API manquante).');
         }
 
+        // Timeouts explicites : sans eux, un PAPI lent bloque un worker PHP 30 s
         $response = Http::withToken($cle)
+            ->timeout(15)
+            ->connectTimeout(5)
             ->acceptJson()
             ->post($this->baseUrl . '/dashboard/api/payment-links', [
                 // TODO(PAPI): ajuster les clés selon la doc réelle

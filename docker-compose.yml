@@ -8,6 +8,13 @@ x-app-env: &app-env
   REVERB_PORT: ${REVERB_PORT:-8080}
   REVERB_SCHEME: ${REVERB_SCHEME:-http}
   BROADCAST_DRIVER: ${BROADCAST_DRIVER:-reverb}
+  # Sous Docker : cache, rate-limiter, blacklist JWT et queue dans Redis
+  # (le .env local peut rester en file/sync pour le dev hors Docker)
+  REDIS_HOST: redis
+  REDIS_PORT: 6379
+  REDIS_PASSWORD: null
+  CACHE_DRIVER: redis
+  QUEUE_CONNECTION: redis
 
 services:
   # ── PHP-FPM (Laravel app) ──────────────────────────────────────────
@@ -27,6 +34,8 @@ services:
       <<: *app-env
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     networks:
       - fandrio
@@ -91,6 +100,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - fandrio
 
@@ -113,6 +124,8 @@ services:
       <<: *app-env
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     networks:
       - fandrio
@@ -137,6 +150,51 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - fandrio
+
+  # ── Queue worker (push notifications, broadcasts WebSocket) ──────
+  # queue:listen recharge le code à chaque job (pratique en dev avec le
+  # bind-mount). En prod : queue:work (cf. docker-compose.prod.yml).
+  queue:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fandrio_queue
+    restart: unless-stopped
+    working_dir: /var/www
+    entrypoint: ["entrypoint.sh"]
+    command: ["php", "artisan", "queue:listen", "--tries=3", "--timeout=60"]
+    volumes:
+      - .:/var/www
+      - ./docker/php/php.ini:/usr/local/etc/php/conf.d/custom.ini
+    env_file:
+      - .env
+    environment:
+      <<: *app-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - fandrio
+
+  # ── Redis (cache, rate-limiter, queue) ─────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: fandrio_redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
     networks:
       - fandrio
 
@@ -161,6 +219,7 @@ services:
 
 volumes:
   pgdata:
+  redisdata:
   pgadmin_data:
 
 networks:

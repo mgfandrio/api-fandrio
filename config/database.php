@@ -76,6 +76,15 @@ return [
             'prefix_indexes' => true,
             'search_path' => 'fandrio_app, public',
             'sslmode' => 'prefer',
+            // Connexion persistante : chaque worker PHP-FPM garde sa connexion
+            // ouverte entre deux requêtes (une nouvelle connexion coûte ~90 ms
+            // de CPU : fork Postgres + authentification SCRAM).
+            // Connexions ouvertes = nb de workers (PHP_FPM_MAX_CHILDREN) par
+            // serveur : rester sous max_connections (100). Avec plusieurs
+            // serveurs API, désactiver et passer par PgBouncer.
+            'options' => extension_loaded('pdo_pgsql') ? [
+                PDO::ATTR_PERSISTENT => (bool) env('DB_PERSISTENT', false),
+            ] : [],
         ],
 
         'sqlsrv' => [

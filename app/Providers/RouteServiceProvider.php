@@ -25,7 +25,13 @@ class RouteServiceProvider extends ServiceProvider
     public function boot(): void
     {
         RateLimiter::for('api', function (Request $request) {
-            return Limit::perMinute(60)->by($request->user()?->id ?: $request->ip());
+            // Compteur par utilisateur connecté, sinon par IP.
+            // getAuthIdentifier() (= util_id) : `->id` n'existe pas sur Utilisateur,
+            // il valait toujours null et tous les clients d'une même IP (CGNAT
+            // mobile, Wi-Fi public) partageaient le même quota.
+            $userId = $request->user()?->getAuthIdentifier();
+
+            return Limit::perMinute(60)->by($userId ? 'util:' . $userId : 'ip:' . $request->ip());
         });
 
         $this->routes(function () {

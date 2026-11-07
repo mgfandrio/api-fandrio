@@ -18,3 +18,4 @@ docker
 !docker/nginx/default.conf
 docker-compose.yml
 README.md
+loadtest

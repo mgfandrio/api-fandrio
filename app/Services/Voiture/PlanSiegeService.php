@@ -155,8 +155,12 @@ class PlanSiegeService
     {
         $cacheKey = self::CACHE_KEY_PREFIX . $planId;
 
-        if (Cache::has($cacheKey)) {
-            return Cache::get($cacheKey);
+        // Lecture unique (has() puis get() : null si invalidé entre les deux)
+
+        if (is_array($enCache = Cache::get($cacheKey))) {
+
+            return $enCache;
+
         }
 
         $plan = PlanSiege::findOrFail($planId);

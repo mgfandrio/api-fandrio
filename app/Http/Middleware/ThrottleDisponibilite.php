@@ -10,7 +10,9 @@ class ThrottleDisponibilite
 {
     public function handle(Request $request, Closure $next, $maxAttempts = 60, $decayMinutes = 1) {
 
-        $key = 'disponibilite:' . ($request->user()?->id ?: $request->ip());
+        // getAuthIdentifier() (= util_id) : `->id` valait toujours null => quota par IP
+        $userId = $request->user()?->getAuthIdentifier();
+        $key = 'disponibilite:' . ($userId ? 'util:' . $userId : 'ip:' . $request->ip());
 
         if (RateLimiter::tooManyAttempts($key, $maxAttempts)) {
             return response()->json([

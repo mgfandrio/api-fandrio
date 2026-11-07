@@ -111,8 +111,16 @@ class AuthentificationService
      */
     private function estAdminSysteme(ConnexionDTO $connexionDTO): bool
     {
-        return $connexionDTO->identifiant === 'fandrioAdmin.mg' && 
-               $connexionDTO->motDePasse === 'fandrio.Admin1019!';
+        // Identifiants dans le .env (config/api.php), mot de passe sous forme d'empreinte bcrypt
+        $identifiant = (string) config('api.admin_systeme.identifiant');
+        $empreinte   = (string) config('api.admin_systeme.mot_de_passe_hash');
+
+        if ($identifiant === '' || $empreinte === '') {
+            return false; // connexion admin système désactivée
+        }
+
+        return hash_equals($identifiant, (string) $connexionDTO->identifiant)
+            && Hash::check($connexionDTO->motDePasse, $empreinte);
     }
 
     /**
@@ -120,7 +128,7 @@ class AuthentificationService
      */
     private function genererReponseAdminSysteme(): array
     {
-        $admin = Utilisateur::where('util_email', 'admin@fandrio.mg')->first();
+        $admin = Utilisateur::where('util_email', config('api.admin_systeme.email'))->first();
 
         if (!$admin) {
             throw new \Exception('Compte administrateur système non trouvé');

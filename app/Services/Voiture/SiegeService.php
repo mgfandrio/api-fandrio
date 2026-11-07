@@ -28,8 +28,11 @@ class SiegeService
         // disponibles ici dès l'expiration (expire_lock dépassé).
         $cacheKey = self::CACHE_KEY_PREFIX . $voyageId;
 
-        if (Cache::has($cacheKey)) {
-            return Cache::get($cacheKey);
+        // Une seule lecture : avec has() puis get(), une invalidation entre
+        // les deux (réservation d'un autre client) renvoyait null => erreur 500.
+        $enCache = Cache::get($cacheKey);
+        if (is_array($enCache)) {
+            return $enCache;
         }
 
         $voyage = Voyage::with('voiture.planSiege')->findOrFail($voyageId);

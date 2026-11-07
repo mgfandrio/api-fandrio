@@ -27,11 +27,10 @@ class DisponibiliteService
         $cacheKey = self::CACHE_KEY_PREFIX . $voyageId;
 
         // Vérifier le cache d'abord
-        if (Cache::has($cacheKey)) {
-            $cacheData = Cache::get($cacheKey);
-
+        $cacheData = Cache::get($cacheKey); // lecture unique (has() puis get() : null si invalidé entre les deux)
+        if (is_array($cacheData)) {
             // Vérifier la fraîcheur des données
-            if (time() - $cacheData['timestamp'] < 5) {
+            if (time() - ($cacheData['timestamp'] ?? 0) < 5) {
                 return $cacheData;
             }
         }
@@ -107,8 +106,9 @@ class DisponibiliteService
         foreach ($voyageIds as $voyageId) {
             $cacheKey = self::CACHE_KEY_PREFIX . $voyageId;
             
-            if (Cache::has($cacheKey)) {
-                $resultats[$voyageId] = Cache::get($cacheKey);
+            $enCache = Cache::get($cacheKey);
+            if (is_array($enCache)) {
+                $resultats[$voyageId] = $enCache;
             } else {
                 $voyagesARafraichir[] = $voyageId;
             }

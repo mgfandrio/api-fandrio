@@ -21,8 +21,9 @@ class RechercheService
         $cacheKey = $this->genererCleCache($criteres);
 
         // Utiliser le cache pour les recherches fréquentes
-        if (Cache::has($cacheKey)) {
-            return Cache::get($cacheKey);
+        // Lecture unique (has() puis get() : null si invalidé entre les deux)
+        if (is_array($enCache = Cache::get($cacheKey))) {
+            return $enCache;
         }
 
         $query = Voyage::with([
@@ -80,8 +81,12 @@ class RechercheService
     {
         $cacheKey = 'suggestions_recherche';
 
-        if (Cache::has($cacheKey)) {
-            return Cache::get($cacheKey);
+        // Lecture unique (has() puis get() : null si invalidé entre les deux)
+
+        if (is_array($enCache = Cache::get($cacheKey))) {
+
+            return $enCache;
+
         }
 
         // Destinations populaires (provinces avec le plus de trajets)

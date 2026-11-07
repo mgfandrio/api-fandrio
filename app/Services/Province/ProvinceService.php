@@ -101,8 +101,9 @@ class ProvinceService
         $cacheKey = $this->genererCleCache($filtres);
 
         // Utiliser le cache pour les requêtes sans pagination
-        if (empty($filtres) && Cache::has(self::CACHE_KEY_ALL)) {
-            return Cache::get(self::CACHE_KEY_ALL);
+        // Lecture unique (has() puis get() : null si invalidé entre les deux)
+        if (empty($filtres) && is_array($enCache = Cache::get(self::CACHE_KEY_ALL))) {
+            return $enCache;
         }
 
         $query = Province::query();
@@ -259,8 +260,9 @@ class ProvinceService
      */
     public function getStatistiques(): array
     {
-        if (Cache::has(self::CACHE_KEY_STATS)) {
-            return Cache::get(self::CACHE_KEY_STATS);
+        // Lecture unique (has() puis get() : null si invalidé entre les deux)
+        if (is_array($enCache = Cache::get(self::CACHE_KEY_STATS))) {
+            return $enCache;
         }
 
         $total = Province::count();

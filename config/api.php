@@ -56,4 +56,24 @@ return [
         'port'   => env('REVERB_PUBLIC_PORT', env('REVERB_PORT', 8080)),
         'key'    => env('REVERB_APP_KEY'),
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Super-administrateur système
+    |--------------------------------------------------------------------------
+    |
+    | Connexion spéciale qui ouvre le compte `email`. Le mot de passe n'est
+    | jamais stocké en clair : seulement son empreinte bcrypt, générée par
+    |   php -r 'echo password_hash("MOT_DE_PASSE", PASSWORD_BCRYPT, ["cost"=>12]);'
+    | Dans le .env, mettre l'empreinte entre apostrophes ('...') : sinon
+    | Docker Compose interprète les "$" qu'elle contient.
+    | Si l'identifiant ou l'empreinte est vide, cette connexion est désactivée.
+    |
+    */
+
+    'admin_systeme' => [
+        'identifiant'       => env('ADMIN_SYSTEME_IDENTIFIANT'),
+        'mot_de_passe_hash' => env('ADMIN_SYSTEME_MDP_HASH'),
+        'email'             => env('ADMIN_SYSTEME_EMAIL', 'admin@fandrio.mg'),
+    ],
 ];

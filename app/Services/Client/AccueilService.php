@@ -34,16 +34,29 @@ class AccueilService
             ? "accueil_province_{$provinceProche->pro_id}_{$slot}"
             : "accueil_aleatoire_{$slot}";
 
-        $donnees = Cache::remember($cacheKey, self::CACHE_DURATION, function () use ($provinceProche) {
-            return [
-                'compagnies' => $this->getCompagnies($provinceProche),
-                'voyages'    => $this->getVoyages($provinceProche),
-                'province_detectee' => $provinceProche ? [
-                    'id'  => $provinceProche->pro_id,
-                    'nom' => $provinceProche->pro_nom,
-                ] : null,
-            ];
-        });
+        $calculer = fn () => [
+            'compagnies' => $this->getCompagnies($provinceProche),
+            'voyages'    => $this->getVoyages($provinceProche),
+            'province_detectee' => $provinceProche ? [
+                'id'  => $provinceProche->pro_id,
+                'nom' => $provinceProche->pro_nom,
+            ] : null,
+        ];
+
+        $donnees = Cache::get($cacheKey);
+
+        if ($donnees === null) {
+            // Cache expiré : un seul worker recalcule, les autres attendent
+            // son résultat (sinon chaque client arrivant au même moment
+            // relance les requêtes lourdes de l'accueil).
+            try {
+                $donnees = Cache::lock($cacheKey . ':calcul', 10)->block(5, function () use ($cacheKey, $calculer) {
+                    return Cache::remember($cacheKey, self::CACHE_DURATION, $calculer);
+                });
+            } catch (\Illuminate\Contracts\Cache\LockTimeoutException $e) {
+                $donnees = $calculer();
+            }
+        }
 
         // Rafraîchir les places disponibles en temps réel (hors cache)
         // pour que la liste des voyages à venir reflète les réservations récentes.
@@ -160,10 +173,10 @@ class AccueilService
             ", [$provinceProche->pro_id, $provinceProche->pro_id]);
 
             // Rotation au sein de chaque groupe
-            $query->orderByRaw("MD5(comp_id::text || ?::text)", [$slot]);
+            $query->orderByRaw("hashint4extended(comp_id, ?)", [$slot]);
         } else {
             // Pas de localisation — rotation pure toutes les 2h
-            $query->orderByRaw("MD5(comp_id::text || ?::text)", [$slot]);
+            $query->orderByRaw("hashint4extended(comp_id, ?)", [$slot]);
         }
 
         $compagnies = $query->limit(10)->get();
@@ -223,10 +236,10 @@ class AccueilService
             $query->orderBy('voyage_heure_depart', 'asc');
 
             // Rotation au sein de chaque groupe de priorité
-            $query->orderByRaw("MD5(voyage_id::text || ?::text)", [$slot]);
+            $query->orderByRaw("hashint4extended(voyage_id, ?)", [$slot]);
         } else {
             // Pas de localisation — rotation aléatoire par slot de 2h
-            $query->orderByRaw("MD5(voyage_id::text || ?::text)", [$slot]);
+            $query->orderByRaw("hashint4extended(voyage_id, ?)", [$slot]);
         }
 
         $voyages = $query->limit(10)->get();

@@ -30,6 +30,7 @@ x-app-env: &app-env
   LOG_LEVEL: ${LOG_LEVEL:-warning}
   DB_HOST: postgres
   DB_PORT: 5432
+  DB_PERSISTENT: ${DB_PERSISTENT:-true}
   REVERB_HOST: reverb
   REVERB_APP_ID: ${REVERB_APP_ID}
   REVERB_APP_KEY: ${REVERB_APP_KEY}

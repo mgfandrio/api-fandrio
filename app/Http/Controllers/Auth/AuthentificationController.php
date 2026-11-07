@@ -41,7 +41,7 @@ class AuthentificationController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut' => false,
-                'message' => $e->getMessage()
+                'message' => $this->messageErreur($e)
             ], 401);
         }
     }
@@ -76,7 +76,7 @@ class AuthentificationController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut' => false,
-                'message' => $e->getMessage()
+                'message' => $this->messageErreur($e)
             ], 400);
         }
     }
@@ -94,7 +94,7 @@ class AuthentificationController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut' => false,
-                'message' => $e->getMessage()
+                'message' => $this->messageErreur($e)
             ], 401);
         }
     }
@@ -311,7 +311,7 @@ class AuthentificationController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut' => false,
-                'message' => 'Erreur lors de l\'upload de la photo: ' . $e->getMessage()
+                'message' => 'Erreur lors de l\'upload de la photo: ' . $this->messageErreur($e)
             ], 500);
         }
     }

@@ -40,7 +40,7 @@ class VoyageurController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut'  => false,
-                'message' => 'Erreur lors de la récupération des voyageurs: ' . $e->getMessage()
+                'message' => 'Erreur lors de la récupération des voyageurs: ' . $this->messageErreur($e)
             ], 500);
         }
     }
@@ -72,7 +72,7 @@ class VoyageurController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut'  => false,
-                'message' => 'Erreur lors de la récupération du voyageur: ' . $e->getMessage()
+                'message' => 'Erreur lors de la récupération du voyageur: ' . $this->messageErreur($e)
             ], 500);
         }
     }
@@ -114,7 +114,7 @@ class VoyageurController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut'  => false,
-                'message' => 'Erreur lors de l\'ajout du voyageur: ' . $e->getMessage()
+                'message' => 'Erreur lors de l\'ajout du voyageur: ' . $this->messageErreur($e)
             ], 500);
         }
     }
@@ -178,7 +178,7 @@ class VoyageurController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut'  => false,
-                'message' => 'Erreur lors de l\'ajout des voyageurs: ' . $e->getMessage()
+                'message' => 'Erreur lors de l\'ajout des voyageurs: ' . $this->messageErreur($e)
             ], 500);
         }
     }
@@ -226,7 +226,7 @@ class VoyageurController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut'  => false,
-                'message' => 'Erreur lors de la modification du voyageur: ' . $e->getMessage()
+                'message' => 'Erreur lors de la modification du voyageur: ' . $this->messageErreur($e)
             ], 500);
         }
     }
@@ -268,7 +268,7 @@ class VoyageurController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut'  => false,
-                'message' => 'Erreur lors de la suppression du voyageur: ' . $e->getMessage()
+                'message' => 'Erreur lors de la suppression du voyageur: ' . $this->messageErreur($e)
             ], 500);
         }
     }
@@ -324,7 +324,7 @@ class VoyageurController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut'  => false,
-                'message' => 'Erreur lors de la suppression des voyageurs: ' . $e->getMessage()
+                'message' => 'Erreur lors de la suppression des voyageurs: ' . $this->messageErreur($e)
             ], 500);
         }
     }
@@ -337,6 +337,19 @@ class VoyageurController extends Controller
     public function parReservation(int $resId): JsonResponse
     {
         try {
+            // Seul le propriétaire de la réservation peut voir ses voyageurs
+            // (noms, téléphones, CIN)
+            $estProprietaire = \App\Models\Reservation\Reservation::where('res_id', $resId)
+                ->where('util_id', Auth::id())
+                ->exists();
+
+            if (!$estProprietaire) {
+                return response()->json([
+                    'statut'  => false,
+                    'message' => 'Réservation introuvable.'
+                ], 404);
+            }
+
             $voyageurs = $this->voyageurService->recupererVoyageursParReservation($resId);
 
             return response()->json([
@@ -349,7 +362,7 @@ class VoyageurController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut'  => false,
-                'message' => 'Erreur lors de la récupération des voyageurs: ' . $e->getMessage()
+                'message' => 'Erreur lors de la récupération des voyageurs: ' . $this->messageErreur($e)
             ], 500);
         }
     }

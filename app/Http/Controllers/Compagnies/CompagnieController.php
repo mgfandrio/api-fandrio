@@ -32,7 +32,7 @@ class CompagnieController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut' => false,
-                'message' => $e->getMessage()
+                'message' => $this->messageErreur($e)
             ], 500);
         }
     }
@@ -53,7 +53,7 @@ class CompagnieController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut' => false,
-                'message' => $e->getMessage()
+                'message' => $this->messageErreur($e)
             ], 500);
         }
     }
@@ -75,7 +75,7 @@ class CompagnieController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut' => false,
-                'message' => $e->getMessage()
+                'message' => $this->messageErreur($e)
             ], 500);
         }
     }
@@ -135,7 +135,7 @@ class CompagnieController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut' => false,
-                'message' => $e->getMessage()
+                'message' => $this->messageErreur($e)
             ], 400);
         }
     }
@@ -206,7 +206,7 @@ class CompagnieController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut' => false,
-                'message' => $e->getMessage()
+                'message' => $this->messageErreur($e)
             ], 400);
         }
     }
@@ -241,7 +241,7 @@ class CompagnieController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut' => false,
-                'message' => $e->getMessage()
+                'message' => $this->messageErreur($e)
             ], 400);
         }
     }
@@ -278,7 +278,7 @@ class CompagnieController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut' => false,
-                'message' => $e->getMessage()
+                'message' => $this->messageErreur($e)
             ], 400);
         }
     }
@@ -344,7 +344,7 @@ class CompagnieController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut' => false,
-                'message' => $e->getMessage()
+                'message' => $this->messageErreur($e)
             ], 400);
         }
     }
@@ -408,7 +408,7 @@ class CompagnieController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut' => false,
-                'message' => 'Erreur lors de l\'upload du logo: ' . $e->getMessage()
+                'message' => 'Erreur lors de l\'upload du logo: ' . $this->messageErreur($e)
             ], 500);
         }
     }
@@ -459,7 +459,7 @@ class CompagnieController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut' => false,
-                'message' => 'Erreur lors de la suppression du logo: ' . $e->getMessage()
+                'message' => 'Erreur lors de la suppression du logo: ' . $this->messageErreur($e)
             ], 500);
         }
     }

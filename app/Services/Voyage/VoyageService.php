@@ -172,50 +172,14 @@ class VoyageService
 
 
     /**
-     * Met à jour automatiquement les statuts des voyages d'une compagnie (mode "lazy",
-     * appelé à chaque listage). Ne gère QUE les transitions Programmé (1) → En cours (2) :
-     * - Toutes les places sont prises
-     * - OU l'heure de départ est atteinte aujourd'hui
-     *
-     * IMPORTANT : Les transitions vers Terminé (3) et Annulé (4) sont gérées
-     * EXCLUSIVEMENT par la commande planifiée `voyages:gestion-statuts`
-     * (App\Console\Commands\GestionStatutVoyagesCommand) car elles nécessitent :
-     *   - Application du seuil de réservations (≥ 5 = terminé, sinon annulé+remboursement)
-     *   - Envoi de notifications à la compagnie
-     *   - Logique de remboursement
-     * Faire ces transitions ici dupliquerait la logique sans notifications/remboursement
-     * et provoquerait des incohérences (voyages marqués Terminé alors qu'ils auraient dû
-     * être Annulés faute de réservations suffisantes).
-     */
-    public static function autoCompleterVoyages(int $compagnieId): void
-    {
-        // 1. Programmé → En cours : places toutes réservées (complet)
-        Voyage::whereHas('trajet', function($q) use ($compagnieId) {
-                $q->where('comp_id', $compagnieId);
-            })
-            ->where('voyage_statut', 1)
-            ->whereRaw('places_reservees >= places_disponibles')
-            ->update(['voyage_statut' => 2]);
-
-        // 2. Programmé → En cours : heure de départ atteinte aujourd'hui
-        Voyage::whereHas('trajet', function($q) use ($compagnieId) {
-                $q->where('comp_id', $compagnieId);
-            })
-            ->where('voyage_statut', 1)
-            ->where('voyage_date', '=', now()->toDateString())
-            ->where('voyage_heure_depart', '<=', now()->format('H:i:s'))
-            ->update(['voyage_statut' => 2]);
-    }
-
-    /**
      * Récupère la liste des voyages de la compagnie
      */
     public function listerVoyages(array $filtres = []): array 
     {
         $compagnieId = $this->getCompagnieUtilisateur();
 
-        // Mise à jour automatique des statuts
-        self::autoCompleterVoyages($compagnieId);
+        // Statuts (complet / départ atteint → En cours ; Terminé ; Annulé) mis à
+        // jour par la tâche planifiée `voyages:gestion-statuts` (chaque minute).
 
         $query = Voyage::with(['trajet.provinceDepart', 'trajet.provinceArrivee', 'voiture'])
             ->whereHas('trajet', function($q) use ($compagnieId) {

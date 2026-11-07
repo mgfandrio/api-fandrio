@@ -118,7 +118,7 @@ class RemboursementController extends Controller
             ]);
         } catch (\Exception $e) {
             Log::error('Remboursements index error: ' . $e->getMessage());
-            return response()->json(['statut' => false, 'message' => $e->getMessage()], 500);
+            return response()->json(['statut' => false, 'message' => $this->messageErreur($e)], 500);
         }
     }
 
@@ -152,7 +152,7 @@ class RemboursementController extends Controller
             return response()->json(['statut' => true, 'data' => $stats]);
         } catch (\Exception $e) {
             Log::error('Remboursements stats error: ' . $e->getMessage());
-            return response()->json(['statut' => false, 'message' => $e->getMessage()], 500);
+            return response()->json(['statut' => false, 'message' => $this->messageErreur($e)], 500);
         }
     }
 
@@ -215,7 +215,7 @@ class RemboursementController extends Controller
             });
         } catch (\Exception $e) {
             Log::error('marquerTraite error: ' . $e->getMessage());
-            return response()->json(['statut' => false, 'message' => $e->getMessage()], 500);
+            return response()->json(['statut' => false, 'message' => $this->messageErreur($e)], 500);
         }
     }
 
@@ -274,7 +274,7 @@ class RemboursementController extends Controller
             });
         } catch (\Exception $e) {
             Log::error('refuser remboursement error: ' . $e->getMessage());
-            return response()->json(['statut' => false, 'message' => $e->getMessage()], 500);
+            return response()->json(['statut' => false, 'message' => $this->messageErreur($e)], 500);
         }
     }
 }

@@ -90,12 +90,12 @@ class PlanSiegeService
         while ($compteur < $nombrePlaces) {
             $siegesRangee = [];
             for ($i = 0; $i < $siegesParRangee && $compteur < $nombrePlaces; $i++) {
+                $compteur++;
                 $siegesRangee[] = [
-                    'numero' => $numeroRangee . $lettres[$i],
-                    'lettre' => $lettres[$i],
+                    'numero' => $compteur,     // numéro de siège : entier de 1 à N
+                    'lettre' => $lettres[$i],  // position dans la rangée (colonne)
                     'type'   => 'standard',
                 ];
-                $compteur++;
             }
             $rangees[] = [
                 'numero' => $numeroRangee,

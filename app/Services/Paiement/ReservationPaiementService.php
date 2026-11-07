@@ -55,20 +55,71 @@ class ReservationPaiementService
         ];
     }
 
-    /**
-     * Confirme une réservation payée (appelé par le webhook billet).
-     * Idempotent. Reprend la logique de ReservationController::confirm
-     * (statut payé + sièges définitivement réservés + notification compagnie).
-     */
-    public function confirmerPaiement(Reservation $reservation, ?string $papiTransactionId): void
-    {
-        if ((int) $reservation->res_statut === 2) {
-            return; // déjà confirmée → idempotent
-        }
+    /** Résultats de confirmerPaiement() */
+    public const CONFIRMEE = 'confirmee';
+    public const DEJA_TRAITEE = 'deja_traitee';
+    public const REMBOURSEMENT = 'remboursement';
 
+    /**
+     * Traite un paiement réussi (appelé par le webhook billet). Idempotent.
+     *
+     * - Réservation en attente (statut 1) avec ses sièges : confirmée
+     *   (statut payé + sièges définitivement réservés + notification compagnie).
+     * - Réservation déjà libérée (expirée / abandonnée) : le paiement est arrivé
+     *   trop tard, ses sièges ont pu être réattribués. La réservation reste
+     *   annulée et un remboursement "en attente" est créé (flux Remboursements
+     *   de l'admin compagnie) ; client et compagnie sont notifiés.
+     *
+     * La réservation est verrouillée (FOR UPDATE) : pas de course avec la
+     * libération des réservations expirées (ReservationExpireeService).
+     *
+     * @return string self::CONFIRMEE | self::DEJA_TRAITEE | self::REMBOURSEMENT
+     */
+    public function confirmerPaiement(Reservation $reservation, ?string $papiTransactionId): string
+    {
         $siegesDiffusion = [];
 
-        DB::transaction(function () use ($reservation, $papiTransactionId, &$siegesDiffusion) {
+        $resultat = DB::transaction(function () use ($reservation, $papiTransactionId, &$siegesDiffusion) {
+            $reservation = Reservation::where('res_id', $reservation->res_id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ((int) $reservation->res_statut === 2) {
+                return self::DEJA_TRAITEE; // déjà confirmée (webhook rejoué)
+            }
+
+            $siegesLies = SiegeReserve::where('res_id', $reservation->res_id)->count();
+            $toujoursValide = (int) $reservation->res_statut === 1
+                && $siegesLies >= (int) $reservation->nb_voyageurs;
+
+            if (!$toujoursValide) {
+                if ((int) $reservation->res_remb_statut > 0) {
+                    return self::DEJA_TRAITEE; // remboursement déjà créé (webhook rejoué)
+                }
+
+                $reservation->update([
+                    'res_statut'      => 4, // reste / devient annulée (sièges libérés)
+                    'numero_paiement' => $papiTransactionId,
+                    'montant_avance'  => $reservation->montant_total, // paiement reçu
+                    'montant_restant' => 0,
+                    'res_remb_statut' => 1, // remboursement en attente
+                    'res_remb_montant' => $reservation->montant_total,
+                    'date_limite_paiement' => null,
+                ]);
+
+                // Cas limite : sièges encore rattachés (réservation incomplète) → libérés
+                SiegeReserve::where('res_id', $reservation->res_id)
+                    ->where('siege_statut', 3)
+                    ->update([
+                        'siege_statut' => 2,
+                        'utilisateur_id' => null,
+                        'res_id' => null,
+                        'expire_lock' => null,
+                    ]);
+
+                return self::REMBOURSEMENT;
+            }
+
             $reservation->update([
                 'res_statut'           => 2, // Confirmé (payé)
                 'numero_paiement'      => $papiTransactionId,
@@ -82,7 +133,22 @@ class ReservationPaiementService
                 $siegesDiffusion[] = ['numero' => $siege->siege_numero, 'util' => $siege->utilisateur_id];
             }
             // NB : places_reservees déjà incrémenté par le trigger SQL à la création.
+
+            return self::CONFIRMEE;
         });
+
+        if ($resultat === self::DEJA_TRAITEE) {
+            return $resultat;
+        }
+
+        if ($resultat === self::REMBOURSEMENT) {
+            Log::warning('PAPI : paiement reçu après expiration, remboursement créé', [
+                'res_id' => $reservation->res_id,
+                'transaction_id' => $papiTransactionId,
+            ]);
+            $this->notifierPaiementTardif($reservation);
+            return $resultat;
+        }
 
         // Diffusion temps réel des sièges : best-effort HORS transaction
         // (une panne de broadcast ne doit jamais annuler la confirmation d'un paiement).
@@ -118,6 +184,42 @@ class ReservationPaiementService
             );
         } catch (\Throwable $e) {
             Log::warning('Notification admin (paiement PAPI) échouée : ' . $e->getMessage());
+        }
+
+        return $resultat;
+    }
+
+    /**
+     * Notifie le client (remboursement à venir) et la compagnie (remboursement
+     * à effectuer) d'un paiement arrivé après expiration. Best-effort.
+     */
+    private function notifierPaiementTardif(Reservation $reservation): void
+    {
+        try {
+            $reservation = $reservation->fresh(['voyage.trajet.provinceDepart', 'voyage.trajet.provinceArrivee', 'utilisateur']);
+            $voyage = $reservation->voyage;
+            $client = $reservation->utilisateur;
+            $clientNom = trim(($client->util_prenom ?? '') . ' ' . ($client->util_nom ?? ''));
+            $depart = $voyage->trajet->provinceDepart->pro_nom ?? 'N/A';
+            $arrivee = $voyage->trajet->provinceArrivee->pro_nom ?? 'N/A';
+            $voyageInfo = "{$depart} → {$arrivee} ({$voyage->voyage_date->format('d/m/Y')})";
+            $montant = (float) $reservation->res_remb_montant;
+
+            NotificationService::notifierClientPaiementTardif(
+                (int) $reservation->util_id,
+                (int) $reservation->res_id,
+                $montant,
+                $voyageInfo
+            );
+            NotificationService::notifierAdminPaiementTardif(
+                (int) $voyage->trajet->comp_id,
+                (int) $reservation->res_id,
+                $clientNom,
+                $montant,
+                $voyageInfo
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Notification paiement tardif échouée : ' . $e->getMessage());
         }
     }
 }

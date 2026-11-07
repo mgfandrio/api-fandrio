@@ -35,7 +35,7 @@ class ReservationPaiementController extends Controller
 
             return response()->json(['statut' => true, 'data' => $data]);
         } catch (\Throwable $e) {
-            return response()->json(['statut' => false, 'message' => $e->getMessage()], 400);
+            return response()->json(['statut' => false, 'message' => $this->messageErreur($e)], 400);
         }
     }
 }

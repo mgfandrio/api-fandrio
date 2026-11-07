@@ -106,8 +106,8 @@ class Voyage extends Model
      */
     public function estFutur(): bool
     {
-        $dateTimeDepart = $this->voyage_date . ' ' . $this->voyage_heure_depart;
-        return strtotime($dateTimeDepart) >= time();
+        $depart = $this->getTimestampDepart();
+        return $depart !== null && $depart >= time();
     }
 
     /**
@@ -115,8 +115,27 @@ class Voyage extends Model
      */
     public function peutEtreAnnule(): bool
     {
-        $dateTimeDepart = strtotime($this->voyage_date . ' ' . $this->voyage_heure_depart);
-        $timestampDepart = strtotime($dateTimeDepart);
-        return ($timestampDepart - time()) >= 86400; // 24 heures en secondes
+        $depart = $this->getTimestampDepart();
+        return $depart !== null && ($depart - time()) >= 86400; // 24 heures en secondes
+    }
+
+    /**
+     * Timestamp du départ (date + heure).
+     * voyage_date est casté en date (Carbon "Y-m-d 00:00:00") : le concaténer tel
+     * quel avec l'heure donnait une chaîne invalide => strtotime() === false.
+     */
+    private function getTimestampDepart(): ?int
+    {
+        if (!$this->voyage_date || !$this->voyage_heure_depart) {
+            return null;
+        }
+
+        $date = $this->voyage_date instanceof \DateTimeInterface
+            ? $this->voyage_date->format('Y-m-d')
+            : (string) $this->voyage_date;
+
+        $timestamp = strtotime($date . ' ' . $this->voyage_heure_depart);
+
+        return $timestamp === false ? null : $timestamp;
     }
 }

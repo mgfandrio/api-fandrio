@@ -28,7 +28,7 @@ class SiegeController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut' => false,
-                'message' => 'Erreur lors de la récupération du plan de sièges: ' . $e->getMessage()
+                'message' => 'Erreur lors de la récupération du plan de sièges: ' . $this->messageErreur($e)
             ], 404);
         }
     }
@@ -61,12 +61,12 @@ class SiegeController extends Controller
         } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([
                 'statut' => false,
-                'message' => 'Données de requête invalides: ' . $e->getMessage()
+                'message' => 'Données de requête invalides: ' . $this->messageErreur($e)
             ], 422);
         } catch (\Exception $e) {
             return response()->json([
                 'statut' => false,
-                'message' => 'Erreur lors de la sélection du siège: ' . $e->getMessage()
+                'message' => 'Erreur lors de la sélection du siège: ' . $this->messageErreur($e)
             ], 400);
         }
     } 
@@ -104,7 +104,7 @@ class SiegeController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut' => false,
-                'message' => 'Erreur lors de la libération du siège: ' . $e->getMessage()
+                'message' => 'Erreur lors de la libération du siège: ' . $this->messageErreur($e)
             ], 400);
         }
     }
@@ -141,7 +141,7 @@ class SiegeController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut' => false,
-                'message' => 'Erreur lors de la vérification des sièges: ' . $e->getMessage()
+                'message' => 'Erreur lors de la vérification des sièges: ' . $this->messageErreur($e)
             ], 400);
         }
     }
@@ -166,7 +166,7 @@ class SiegeController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut' => false,
-                'message' => 'Erreur lors de la récupération des sièges réservés: ' . $e->getMessage()
+                'message' => 'Erreur lors de la récupération des sièges réservés: ' . $this->messageErreur($e)
             ], 400);
         }
     }
@@ -192,7 +192,7 @@ class SiegeController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut' => false,
-                'message' => $e->getMessage()
+                'message' => $this->messageErreur($e)
             ], 400);
         }
     }
@@ -238,7 +238,7 @@ class SiegeController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut' => false,
-                'message' => 'Erreur lors de la récupération de la configuration WebSocket: ' . $e->getMessage()
+                'message' => 'Erreur lors de la récupération de la configuration WebSocket: ' . $this->messageErreur($e)
             ], 400);
         }
     }

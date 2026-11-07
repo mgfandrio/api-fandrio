@@ -29,7 +29,7 @@ class TrajetController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut' => false,
-                'message' => $e->getMessage()
+                'message' => $this->messageErreur($e)
             ], 500);
         }
     }
@@ -50,7 +50,7 @@ class TrajetController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut' => false,
-                'message' => $e->getMessage()
+                'message' => $this->messageErreur($e)
             ], 500);
         }
     }
@@ -90,7 +90,7 @@ class TrajetController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut' => false,
-                'message' => $e->getMessage()
+                'message' => $this->messageErreur($e)
             ], 400);
         }
     }
@@ -151,13 +151,13 @@ class TrajetController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut' => false,
-                'message' => $e->getMessage()
+                'message' => $this->messageErreur($e)
             ], 400);
 
         } catch (\Exception $e) {
             return response()->json([
                 'statut' => false,
-                'message' => $e->getMessage()
+                'message' => $this->messageErreur($e)
             ], 400);
         }
     }
@@ -193,7 +193,7 @@ class TrajetController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut' => false,
-                'message' => $e->getMessage()
+                'message' => $this->messageErreur($e)
             ], 400);
         }
     }

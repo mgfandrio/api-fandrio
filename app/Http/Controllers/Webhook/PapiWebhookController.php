@@ -97,9 +97,17 @@ class PapiWebhookController extends Controller
             return response()->json(['statut' => true, 'message' => 'Ignoré (statut non payé).']);
         }
 
-        // Idempotent : confirme la réservation (statut payé + sièges) + notifie la compagnie
-        $this->reservations->confirmerPaiement($reservation, $txId);
+        // Idempotent : confirme la réservation (statut payé + sièges) + notifie la compagnie,
+        // ou crée un remboursement si le paiement arrive après expiration.
+        // Toujours 200 : le paiement est bien pris en compte, PAPI ne doit pas réessayer.
+        $resultat = $this->reservations->confirmerPaiement($reservation, $txId);
 
-        return response()->json(['statut' => true, 'message' => 'Réservation confirmée.']);
+        $message = match ($resultat) {
+            ReservationPaiementService::REMBOURSEMENT => 'Paiement reçu après expiration : remboursement créé.',
+            ReservationPaiementService::DEJA_TRAITEE  => 'Paiement déjà traité.',
+            default                                   => 'Réservation confirmée.',
+        };
+
+        return response()->json(['statut' => true, 'message' => $message]);
     }
 }

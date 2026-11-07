@@ -22,9 +22,35 @@ class GestionStatutVoyagesCommand extends Command
         $today = $now->toDateString();
         $currentTime = $now->format('H:i:s');
 
-        // 1. Programmé → En cours : places toutes réservées
+        // Places occupées par des réservations CONFIRMÉES (payées) uniquement.
+        // places_reservees inclut aussi les réservations en attente (statut 1),
+        // qui peuvent encore expirer et libérer leurs places.
+        $placesConfirmeesSql = '(SELECT COALESCE(SUM(r.nb_voyageurs), 0)
+            FROM fandrio_app.reservations r
+            WHERE r.voyage_id = voyages.voyage_id AND r.res_statut = 2)';
+
+        // 0. Réparation : En cours → Programmé pour les voyages passés "en cours"
+        //    parce que pleins de réservations EN ATTENTE ensuite expirées.
+        //    Départ pas encore atteint + pas plein de réservations confirmées.
+        //    (Le statut 2 n'est posé que par cette commande : retour sans risque.)
+        $repares = Voyage::where('voyage_statut', 2)
+            ->where(function ($q) use ($today, $currentTime) {
+                $q->where('voyage_date', '>', $today)
+                  ->orWhere(function ($q2) use ($today, $currentTime) {
+                      $q2->where('voyage_date', $today)
+                         ->where('voyage_heure_depart', '>', $currentTime);
+                  });
+            })
+            ->whereRaw("{$placesConfirmeesSql} < places_disponibles")
+            ->update(['voyage_statut' => 1]);
+
+        if ($repares > 0) {
+            $this->info("→ {$repares} voyage(s) remis en programmé (places libérées par des réservations expirées)");
+        }
+
+        // 1. Programmé → En cours : places toutes réservées par des réservations confirmées
         $complets = Voyage::where('voyage_statut', 1)
-            ->whereRaw('places_reservees >= places_disponibles')
+            ->whereRaw("{$placesConfirmeesSql} >= places_disponibles")
             ->update(['voyage_statut' => 2]);
 
         if ($complets > 0) {
@@ -180,7 +206,7 @@ class GestionStatutVoyagesCommand extends Command
             $this->info("→ {$annules} voyage(s) sans réservation annulé(s)");
         }
 
-        $total = $complets + $enCours + $voyagesTermines->count() + $voyagesAnnulesPeuRes->count() + $annules;
+        $total = $repares + $complets + $enCours + $voyagesTermines->count() + $voyagesAnnulesPeuRes->count() + $annules;
         $this->info("Gestion statuts terminée : {$total} voyage(s) mis à jour.");
 
         return Command::SUCCESS;

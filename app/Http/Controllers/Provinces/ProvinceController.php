@@ -29,7 +29,7 @@ class ProvinceController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut' => false,
-                'message' => $e->getMessage()
+                'message' => $this->messageErreur($e)
             ], 500);
         }
     }
@@ -50,7 +50,7 @@ class ProvinceController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut' => false,
-                'message' => $e->getMessage()
+                'message' => $this->messageErreur($e)
             ], 500);
         }
     }
@@ -71,7 +71,7 @@ class ProvinceController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut' => false,
-                'message' => $e->getMessage()
+                'message' => $this->messageErreur($e)
             ], 500);
         }
     }
@@ -106,7 +106,7 @@ class ProvinceController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut' => false,
-                'message' => $e->getMessage()
+                'message' => $this->messageErreur($e)
             ], 400);
         }
     }
@@ -141,7 +141,7 @@ class ProvinceController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut' => false,
-                'message' => $e->getMessage()
+                'message' => $this->messageErreur($e)
             ], 400);
         }
     }
@@ -197,7 +197,7 @@ class ProvinceController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut' => false,
-                'message' => $e->getMessage()
+                'message' => $this->messageErreur($e)
             ], 400);
         }
     }
@@ -218,7 +218,7 @@ class ProvinceController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut' => false,
-                'message' => $e->getMessage()
+                'message' => $this->messageErreur($e)
             ], 400);
         }
     }
@@ -252,7 +252,7 @@ class ProvinceController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut' => false,
-                'message' => $e->getMessage()
+                'message' => $this->messageErreur($e)
             ], 400);
         }
     }

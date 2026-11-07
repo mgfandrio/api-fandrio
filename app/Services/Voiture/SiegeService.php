@@ -5,7 +5,6 @@ namespace App\Services\Voiture;
 use App\Models\Voitures\SiegeReserve;
 use App\Models\Voyages\Voyage;
 use App\Models\Voitures\PlanSiege;
-use App\Http\Controllers\Client\ReservationController;
 use App\Helpers\DateFormatter;
 use App\Events\SiegeUpdated;
 use Illuminate\Support\Facades\DB;
@@ -22,9 +21,11 @@ class SiegeService
     /**
      * Récupère le plan de sièges d'un voyage
      */
-    public function getPlanSieges(int $voyageId): array 
+    public function getPlanSieges(int $voyageId): array
     {
-        ReservationController::libererReservationsExpirees();
+        // Les réservations expirées sont libérées par la tâche planifiée
+        // `reservations:liberer-expirees` ; leurs sièges apparaissent déjà
+        // disponibles ici dès l'expiration (expire_lock dépassé).
         $cacheKey = self::CACHE_KEY_PREFIX . $voyageId;
 
         if (Cache::has($cacheKey)) {

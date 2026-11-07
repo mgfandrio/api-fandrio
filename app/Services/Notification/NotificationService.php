@@ -195,6 +195,47 @@ class NotificationService
     }
 
     /**
+     * Notifier un client que son paiement est arrivé après l'expiration de sa
+     * réservation (sièges déjà libérés) : il sera remboursé.
+     */
+    public static function notifierClientPaiementTardif(int $utilId, int $resId, float $montant, string $voyageInfo): void
+    {
+        $montantFormate = number_format($montant, 0, ',', ' ');
+        self::envoyer([
+            'type' => 3, // annulation (catégorie)
+            'destinataire_type' => 1,
+            'destinataire_id' => $utilId,
+            'titre' => 'Paiement reçu après expiration',
+            'message' => "Votre paiement de {$montantFormate} Ar pour le voyage {$voyageInfo} est arrivé après l'expiration du délai de réservation : vos sièges avaient déjà été libérés. Vous serez intégralement remboursé par la compagnie.",
+            'res_id' => $resId,
+        ]);
+    }
+
+    /**
+     * Notifier les admins compagnie qu'un paiement est arrivé après expiration
+     * de la réservation : un remboursement est à effectuer.
+     */
+    public static function notifierAdminPaiementTardif(int $compId, int $resId, string $clientNom, float $montant, string $voyageInfo): void
+    {
+        $montantFormate = number_format($montant, 0, ',', ' ');
+        $admins = Utilisateur::where('comp_id', $compId)
+            ->where('util_role', 2)
+            ->where('util_statut', 1)
+            ->get();
+
+        foreach ($admins as $admin) {
+            self::envoyer([
+                'type' => 3, // annulation (catégorie)
+                'destinataire_type' => 2,
+                'destinataire_id' => $admin->util_id,
+                'titre' => 'Remboursement à effectuer (paiement tardif)',
+                'message' => "{$clientNom} a payé {$montantFormate} Ar pour le voyage {$voyageInfo} après l'expiration de sa réservation. La réservation reste annulée : merci de procéder au remboursement (menu Remboursements).",
+                'res_id' => $resId,
+            ]);
+        }
+    }
+
+    /**
      * Notifier un client que sa demande de remboursement a été refusée.
      */
     public static function notifierClientRemboursementRefuse(int $utilId, int $resId, string $voyageInfo, string $motif): void

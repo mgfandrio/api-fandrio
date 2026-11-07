@@ -30,7 +30,7 @@ class AjoutChauffeurController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut' => false,
-                'message' => 'Ajout d\' un nouveau chauffeur echoue: ' . $e->getMessage()
+                'message' => 'Ajout d\' un nouveau chauffeur echoue: ' . $this->messageErreur($e)
             ], 500);
         }
     }

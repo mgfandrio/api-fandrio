@@ -64,7 +64,7 @@ class CommissionPaiementController extends Controller
                 ],
             ]);
         } catch (\Throwable $e) {
-            return response()->json(['statut' => false, 'message' => 'Erreur : ' . $e->getMessage()], 500);
+            return response()->json(['statut' => false, 'message' => 'Erreur : ' . $this->messageErreur($e)], 500);
         }
     }
 }

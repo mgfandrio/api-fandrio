@@ -9,7 +9,6 @@ use App\Models\Voyages\Voyage;
 use App\Models\Compagnies\Compagnie;
 use App\Models\Commissions\Collecte;
 use App\Services\Voiture\SiegeService;
-use App\Services\Voyage\VoyageService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -45,8 +44,8 @@ class ReservationAdminController extends Controller
         try {
             $compagnieId = $this->getCompagnieId();
 
-            // Auto-complétion des voyages (places pleines, heure départ atteinte, date passée)
-            VoyageService::autoCompleterVoyages($compagnieId);
+            // Statuts des voyages (complet / départ atteint) mis à jour par la
+            // tâche planifiée `voyages:gestion-statuts` (chaque minute).
 
             $query = Voyage::with([
                 'trajet.provinceDepart',
@@ -141,7 +140,7 @@ class ReservationAdminController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut' => false,
-                'message' => 'Erreur: ' . $e->getMessage()
+                'message' => 'Erreur: ' . $this->messageErreur($e)
             ], 500);
         }
     }
@@ -168,7 +167,7 @@ class ReservationAdminController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut' => false,
-                'message' => 'Erreur: ' . $e->getMessage()
+                'message' => 'Erreur: ' . $this->messageErreur($e)
             ], 400);
         }
     }
@@ -232,7 +231,7 @@ class ReservationAdminController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut' => false,
-                'message' => 'Erreur: ' . $e->getMessage()
+                'message' => 'Erreur: ' . $this->messageErreur($e)
             ], 400);
         }
     }
@@ -318,7 +317,7 @@ class ReservationAdminController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut' => false,
-                'message' => 'Erreur: ' . $e->getMessage()
+                'message' => 'Erreur: ' . $this->messageErreur($e)
             ], 400);
         }
     }
@@ -331,9 +330,6 @@ class ReservationAdminController extends Controller
     {
         try {
             $compagnieId = $this->getCompagnieId();
-
-            // Auto-complétion des voyages
-            VoyageService::autoCompleterVoyages($compagnieId);
 
             $voyageIds = Voyage::whereHas('trajet', fn($q) => $q->where('comp_id', $compagnieId))
                 ->pluck('voyage_id');
@@ -399,7 +395,7 @@ class ReservationAdminController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut' => false,
-                'message' => 'Erreur: ' . $e->getMessage()
+                'message' => 'Erreur: ' . $this->messageErreur($e)
             ], 500);
         }
     }
@@ -557,7 +553,7 @@ class ReservationAdminController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut' => false,
-                'message' => 'Erreur: ' . $e->getMessage()
+                'message' => 'Erreur: ' . $this->messageErreur($e)
             ], 500);
         }
     }
@@ -657,7 +653,7 @@ class ReservationAdminController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut' => false,
-                'message' => 'Erreur: ' . $e->getMessage()
+                'message' => 'Erreur: ' . $this->messageErreur($e)
             ], 500);
         }
     }
@@ -775,7 +771,7 @@ class ReservationAdminController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut' => false,
-                'message' => 'Erreur: ' . $e->getMessage(),
+                'message' => 'Erreur: ' . $this->messageErreur($e),
                 'validation' => 'erreur'
             ], 500);
         }
@@ -812,7 +808,7 @@ class ReservationAdminController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut' => false,
-                'message' => 'Erreur: ' . $e->getMessage()
+                'message' => 'Erreur: ' . $this->messageErreur($e)
             ], 500);
         }
     }
@@ -968,7 +964,7 @@ class ReservationAdminController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut' => false,
-                'message' => 'Erreur: ' . $e->getMessage()
+                'message' => 'Erreur: ' . $this->messageErreur($e)
             ], 500);
         }
     }
@@ -1049,7 +1045,7 @@ class ReservationAdminController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut' => false,
-                'message' => 'Erreur: ' . $e->getMessage()
+                'message' => 'Erreur: ' . $this->messageErreur($e)
             ], 500);
         }
     }

@@ -153,7 +153,7 @@ class CommissionController extends Controller
                 ]
             ]);
         } catch (\Exception $e) {
-            return response()->json(['statut' => false, 'message' => 'Erreur: ' . $e->getMessage()], 500);
+            return response()->json(['statut' => false, 'message' => 'Erreur: ' . $this->messageErreur($e)], 500);
         }
     }
 
@@ -227,7 +227,7 @@ class CommissionController extends Controller
                 ]
             ]);
         } catch (\Exception $e) {
-            return response()->json(['statut' => false, 'message' => 'Erreur: ' . $e->getMessage()], 500);
+            return response()->json(['statut' => false, 'message' => 'Erreur: ' . $this->messageErreur($e)], 500);
         }
     }
 
@@ -282,7 +282,7 @@ class CommissionController extends Controller
                 'data'   => ['compagnies' => $compagnies]
             ]);
         } catch (\Exception $e) {
-            return response()->json(['statut' => false, 'message' => 'Erreur: ' . $e->getMessage()], 500);
+            return response()->json(['statut' => false, 'message' => 'Erreur: ' . $this->messageErreur($e)], 500);
         }
     }
 
@@ -321,7 +321,7 @@ class CommissionController extends Controller
                 ]
             ]);
         } catch (\Exception $e) {
-            return response()->json(['statut' => false, 'message' => 'Erreur: ' . $e->getMessage()], 500);
+            return response()->json(['statut' => false, 'message' => 'Erreur: ' . $this->messageErreur($e)], 500);
         }
     }
 
@@ -358,7 +358,7 @@ class CommissionController extends Controller
                 ]
             ]);
         } catch (\Exception $e) {
-            return response()->json(['statut' => false, 'message' => 'Erreur: ' . $e->getMessage()], 500);
+            return response()->json(['statut' => false, 'message' => 'Erreur: ' . $this->messageErreur($e)], 500);
         }
     }
 
@@ -389,7 +389,7 @@ class CommissionController extends Controller
                 ]
             ]);
         } catch (\Exception $e) {
-            return response()->json(['statut' => false, 'message' => 'Erreur: ' . $e->getMessage()], 500);
+            return response()->json(['statut' => false, 'message' => 'Erreur: ' . $this->messageErreur($e)], 500);
         }
     }
 
@@ -430,7 +430,7 @@ class CommissionController extends Controller
                 ]
             ]);
         } catch (\Exception $e) {
-            return response()->json(['statut' => false, 'message' => 'Erreur: ' . $e->getMessage()], 500);
+            return response()->json(['statut' => false, 'message' => 'Erreur: ' . $this->messageErreur($e)], 500);
         }
     }
 
@@ -463,7 +463,7 @@ class CommissionController extends Controller
 
             return response()->json(['statut' => true, 'data' => $data]);
         } catch (\Exception $e) {
-            return response()->json(['statut' => false, 'message' => 'Erreur: ' . $e->getMessage()], 500);
+            return response()->json(['statut' => false, 'message' => 'Erreur: ' . $this->messageErreur($e)], 500);
         }
     }
 
@@ -520,7 +520,7 @@ class CommissionController extends Controller
                 'data'    => $this->formaterCollecte($collecte->fresh()->load('compagnie')),
             ]);
         } catch (\Exception $e) {
-            return response()->json(['statut' => false, 'message' => 'Erreur: ' . $e->getMessage()], 500);
+            return response()->json(['statut' => false, 'message' => 'Erreur: ' . $this->messageErreur($e)], 500);
         }
     }
 
@@ -541,7 +541,7 @@ class CommissionController extends Controller
                 'data'   => ['collectes' => $collectes, 'total' => $collectes->count()]
             ]);
         } catch (\Exception $e) {
-            return response()->json(['statut' => false, 'message' => 'Erreur: ' . $e->getMessage()], 500);
+            return response()->json(['statut' => false, 'message' => 'Erreur: ' . $this->messageErreur($e)], 500);
         }
     }
 
@@ -563,7 +563,7 @@ class CommissionController extends Controller
                 'data'   => ['collectes' => $collectes]
             ]);
         } catch (\Exception $e) {
-            return response()->json(['statut' => false, 'message' => 'Erreur: ' . $e->getMessage()], 500);
+            return response()->json(['statut' => false, 'message' => 'Erreur: ' . $this->messageErreur($e)], 500);
         }
     }
 

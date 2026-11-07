@@ -14,7 +14,7 @@
 #   - Cache, rate-limiter et queue dans Redis ; conteneur "queue" dédié
 #     aux push notifications et broadcasts WebSocket.
 #   - Pas de conteneur "voyagestatus" : le scheduler exécute déjà
-#     voyages:gestion-statuts toutes les 5 min (sinon double exécution).
+#     voyages:gestion-statuts chaque minute (sinon double exécution).
 #
 # Variables à définir dans .env pour la prod (en plus de l'existant) :
 #   APP_KEY, JWT_SECRET, API_KEY, DB_PASSWORD (fort), REVERB_APP_*,

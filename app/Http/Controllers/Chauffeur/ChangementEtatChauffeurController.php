@@ -62,7 +62,7 @@ class ChangementEtatChauffeurController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut' => false,
-                'message' => 'Erreur lors du changement d\'état du chauffeur: ' . $e->getMessage()
+                'message' => 'Erreur lors du changement d\'état du chauffeur: ' . $this->messageErreur($e)
             ], 500);
         }
 

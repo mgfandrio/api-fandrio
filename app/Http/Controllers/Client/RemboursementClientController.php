@@ -86,7 +86,7 @@ class RemboursementClientController extends Controller
             ]);
         } catch (\Exception $e) {
             Log::error('Client remboursements index error: ' . $e->getMessage());
-            return response()->json(['statut' => false, 'message' => $e->getMessage()], 500);
+            return response()->json(['statut' => false, 'message' => $this->messageErreur($e)], 500);
         }
     }
 }

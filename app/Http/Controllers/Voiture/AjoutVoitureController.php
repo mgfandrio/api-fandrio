@@ -30,7 +30,7 @@ class AjoutVoitureController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut' => false,
-                'message' => 'Ajout d\' une nouvelle voiture echouee: ' . $e->getMessage()
+                'message' => 'Ajout d\' une nouvelle voiture echouee: ' . $this->messageErreur($e)
             ], 500);
         }
     }

@@ -58,15 +58,22 @@ class PlanSiege extends Model
             return $sieges;
         }
 
-        // Ancien format avec rangées
+        // Format par rangées (saisie manuelle : liste de types ; génération
+        // automatique : liste d'objets {numero, lettre, type}).
+        // Les sièges sont numérotés en ENTIERS de 1 à N, dans l'ordre des
+        // rangées. Auparavant le code était l'index du siège DANS sa rangée
+        // (0, 1, 2, 3, 0, 1, ...) : codes en double d'une rangée à l'autre et
+        // code 0 refusé par reservation_voyageurs.place_numero (> 0).
+        $numero = 0;
         foreach ($config['rangees'] ?? [] as $rangee) {
-            $lettreRangee = $rangee['lettre'] ?? null;
-            foreach ($rangee['sieges'] as $numero => $type) {
+            $rangeeId = $rangee['lettre'] ?? $rangee['numero'] ?? null;
+            foreach ($rangee['sieges'] ?? [] as $siege) {
+                $numero++;
                 $sieges[] = [
                     'code' => (string) $numero,
-                    'rangee' => $lettreRangee,
+                    'rangee' => $rangeeId,
                     'numero' => $numero,
-                    'type' => $type,
+                    'type' => is_array($siege) ? ($siege['type'] ?? 'normal') : $siege,
                     'statut' => 'libre'
                 ];
             }

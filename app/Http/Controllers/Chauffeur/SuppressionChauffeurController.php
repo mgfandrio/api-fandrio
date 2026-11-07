@@ -35,7 +35,7 @@ class SuppressionChauffeurController extends Controller
             ], 200);
         } catch (\Exception $e) {
 
-            $retourMessage .= ' n\' a pas ete effectuee: ' . $e->getMessage();
+            $retourMessage .= ' n\' a pas ete effectuee: ' . $this->messageErreur($e);
 
             return response()->json([
                 'statut' => false,

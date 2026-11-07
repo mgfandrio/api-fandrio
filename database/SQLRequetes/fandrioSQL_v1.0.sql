@@ -535,6 +535,16 @@ CREATE INDEX idx_compagnies_localisation ON fandrio_app.compagnies(comp_localisa
 CREATE INDEX idx_utilisateurs_email ON fandrio_app.utilisateurs(util_email);
 CREATE INDEX idx_utilisateurs_role ON fandrio_app.utilisateurs(util_role);
 CREATE INDEX idx_utilisateurs_push_token ON fandrio_app.utilisateurs(push_token) WHERE push_token IS NOT NULL;
+-- Admins d'une compagnie (notifications à chaque réservation confirmée)
+CREATE INDEX idx_utilisateurs_compagnie ON fandrio_app.utilisateurs(comp_id) WHERE comp_id IS NOT NULL;
+
+-- Compagnie ↔ provinces (classement des compagnies par province sur l'accueil)
+-- (comp_id est déjà couvert par UNIQUE(comp_id, pro_id))
+CREATE INDEX idx_compagnie_provinces_province ON fandrio_app.compagnie_provinces(pro_id);
+
+-- Voyageurs ("mes voyageurs" côté client)
+CREATE INDEX idx_voyageurs_utilisateur ON fandrio_app.voyageurs(util_id);
+CREATE INDEX idx_reservation_voyageurs_voyageur ON fandrio_app.reservation_voyageurs(voya_id);
 
 -- Réservations
 CREATE INDEX idx_reservations_numero ON fandrio_app.reservations(res_numero);
@@ -547,10 +557,22 @@ CREATE UNIQUE INDEX idx_reservations_numero_paiement_unique
     WHERE numero_paiement IS NOT NULL
       AND numero_paiement != 'N/A'
       AND numero_paiement != '';
+-- Réservations d'un client (dashboard, historique, contrôles d'accès)
+CREATE INDEX idx_reservations_utilisateur ON fandrio_app.reservations(util_id);
+-- Réservations d'un voyage par statut (réservation, libération, stats, gestion statuts)
+CREATE INDEX idx_reservations_voyage_statut ON fandrio_app.reservations(voyage_id, res_statut);
+-- Réservations en attente à libérer (tâche planifiée chaque minute)
+CREATE INDEX idx_reservations_expiration ON fandrio_app.reservations(date_limite_paiement) WHERE res_statut = 1;
 
 -- Voyages
 CREATE INDEX idx_voyages_date ON fandrio_app.voyages(voyage_date);
 CREATE INDEX idx_voyages_statut ON fandrio_app.voyages(voyage_statut);
+-- Recherche / accueil / tâche de gestion des statuts (statut + date)
+CREATE INDEX idx_voyages_statut_date ON fandrio_app.voyages(voyage_statut, voyage_date);
+-- Jointure voyages ↔ trajets (recherche, accueil, voyages d'une compagnie)
+CREATE INDEX idx_voyages_trajet ON fandrio_app.voyages(traj_id);
+-- Disponibilité d'un véhicule à une date
+CREATE INDEX idx_voyages_voiture ON fandrio_app.voyages(voit_id);
 
 -- Trajets
 CREATE INDEX idx_trajets_compagnie ON fandrio_app.trajets(comp_id);
@@ -559,6 +581,9 @@ CREATE INDEX idx_trajets_categorie ON fandrio_app.trajets(traj_categorie);
 
 -- Notifications
 CREATE INDEX idx_notifications_destinataire ON fandrio_app.notifications(notif_destinataire_type, notif_destinataire_id);
+-- Liste / compteur des notifications d'un utilisateur (filtre sur le seul
+-- destinataire_id : l'index ci-dessus, qui commence par le type, n'est pas utilisable)
+CREATE INDEX idx_notifications_destinataire_date ON fandrio_app.notifications(notif_destinataire_id, created_at DESC);
 
 -- Paiements
 CREATE INDEX idx_paiements_statut ON fandrio_app.paiements(paie_statut);
@@ -567,6 +592,8 @@ CREATE INDEX idx_paiements_statut ON fandrio_app.paiements(paie_statut);
 CREATE INDEX idx_voitures_statut ON fandrio_app.voitures(voit_statut);
 CREATE INDEX idx_voitures_categorie ON fandrio_app.voitures(voit_categorie);
 CREATE INDEX idx_chauffeurs_statut ON fandrio_app.chauffeurs(chauff_statut);
+CREATE INDEX idx_voitures_compagnie ON fandrio_app.voitures(comp_id);
+CREATE INDEX idx_chauffeurs_compagnie ON fandrio_app.chauffeurs(comp_id);
 
 -- Collectes
 CREATE INDEX idx_collectes_comp_id ON fandrio_app.collectes(comp_id);
@@ -621,7 +648,10 @@ CREATE TRIGGER update_sieges_reserves_updated_at BEFORE UPDATE ON fandrio_app.si
 CREATE OR REPLACE FUNCTION fandrio_app.generate_reservation_number()
 RETURNS TRIGGER AS $$
 BEGIN
-    NEW.res_numero = 'FAN' || TO_CHAR(CURRENT_DATE, 'YYYYMMDD') || LPAD(NEW.res_id::text, 4, '0');
+    -- LPAD complète à 4 chiffres mais NE DOIT PAS tronquer : LPAD('10001', 4) = '1000'
+    -- donnait le même numéro à 10 réservations consécutives (violation UNIQUE).
+    NEW.res_numero = 'FAN' || TO_CHAR(CURRENT_DATE, 'YYYYMMDD')
+        || LPAD(NEW.res_id::text, GREATEST(4, LENGTH(NEW.res_id::text)), '0');
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
@@ -638,7 +668,9 @@ CREATE TRIGGER trigger_generate_reservation_number
 CREATE OR REPLACE FUNCTION fandrio_app.generate_facture_number()
 RETURNS TRIGGER AS $$
 BEGIN
-    NEW.fact_numero = 'FACT' || TO_CHAR(CURRENT_DATE, 'YYYYMMDD') || LPAD(NEW.fact_id::text, 4, '0');
+    -- Pas de troncature au-delà de 4 chiffres (cf. generate_reservation_number)
+    NEW.fact_numero = 'FACT' || TO_CHAR(CURRENT_DATE, 'YYYYMMDD')
+        || LPAD(NEW.fact_id::text, GREATEST(4, LENGTH(NEW.fact_id::text)), '0');
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;

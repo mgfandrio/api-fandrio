@@ -37,7 +37,7 @@ class ModificationVoitureController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut' => false,
-                'message' => 'Erreur lors de la modification de la voiture: ' . $e->getMessage()
+                'message' => 'Erreur lors de la modification de la voiture: ' . $this->messageErreur($e)
             ], 500);
         }
     }

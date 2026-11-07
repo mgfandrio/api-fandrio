@@ -16,59 +16,13 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use SimpleSoftwareIO\QrCode\Facades\QrCode;
 use App\Services\Notification\NotificationService;
+use App\Services\Reservation\ReservationExpireeService;
 
 use Illuminate\Support\Facades\Log;
 
 class ReservationController extends Controller
 {
-    /**
-     * Libère les réservations qui ont dépassé le délai de paiement
-     * Cette méthode peut être appelée via un cron ou à la volée avant de charger des données.
-     */
-    public static function libererReservationsExpirees(): int 
-    {
-        return DB::transaction(function() {
-            // 1. Trouver les réservations confirmées mais non payées dont le délai a expiré
-            $expirees = Reservation::where('res_statut', 1)
-                ->where('date_limite_paiement', '<', now())
-                ->get();
-            
-            $count = $expirees->count();
-
-            foreach ($expirees as $res) {
-                // Marquer la réservation comme annulée
-                $res->update(['res_statut' => 4]);
-
-                $voyageId = $res->voyage_id;
-
-                // Libérer les sièges associés
-                $sieges = SiegeReserve::where('res_id', $res->res_id)->get();
-                foreach ($sieges as $siege) {
-                    $siegeNumero = $siege->siege_numero;
-                    $siege->update([
-                        'siege_statut' => 2,
-                        'utilisateur_id' => null,
-                        'res_id' => null,
-                        'expire_lock' => null
-                    ]);
-
-                    broadcast(new SiegeUpdated(
-                        $voyageId,
-                        $siegeNumero,
-                        'expire',
-                        null,
-                        ['siege' => $siegeNumero, 'statut' => 2, 'disponible' => true, 'utilisateur_id' => null, 'expire_lock' => null]
-                    ))->toOthers();
-                }
-            }
-
-            if ($count > 0) {
-                Log::info("Nettoyage: $count réservations expirées libérées.");
-            }
-
-            return $count;
-        });
-    }
+    public function __construct(private ReservationExpireeService $reservationExpireeService) {}
 
     /**
      * Récupère les données du tableau de bord de réservation pour l'utilisateur connecté
@@ -77,7 +31,8 @@ class ReservationController extends Controller
     public function dashboard(): JsonResponse
     {
         try {
-            self::libererReservationsExpirees();
+            // Les réservations expirées sont libérées par la tâche planifiée
+            // `reservations:liberer-expirees` (plus d'écriture à chaque lecture).
             $utilisateur = Auth::user();
             $reservationsFull = Reservation::with(['voyage.trajet.provinceDepart', 'voyage.trajet.provinceArrivee'])
                 ->where('util_id', $utilisateur->util_id)
@@ -129,7 +84,7 @@ class ReservationController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut' => false,
-                'message' => 'Erreur lors de la récupération du dashboard: ' . $e->getMessage()
+                'message' => 'Erreur lors de la récupération du dashboard: ' . $this->messageErreur($e)
             ], 500);
         }
     }
@@ -179,7 +134,7 @@ class ReservationController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut' => false,
-                'message' => 'Erreur lors de la récupération de l\'historique: ' . $e->getMessage()
+                'message' => 'Erreur lors de la récupération de l\'historique: ' . $this->messageErreur($e)
             ], 500);
         }
     }
@@ -194,9 +149,11 @@ class ReservationController extends Controller
             $request->validate([
                 'voyage_id' => 'required|integer|exists:voyages,voyage_id',
                 'nb_voyageurs' => 'required|integer|min:1',
-                'montant_total' => 'required|numeric|min:0',
+                // Ignoré : le montant est recalculé côté serveur (tarif × sièges).
+                // Toujours accepté pour compatibilité avec les versions de l'app.
+                'montant_total' => 'nullable|numeric|min:0',
                 'sieges' => 'required|array|min:1',
-                'sieges.*' => 'string',
+                'sieges.*' => 'required|string|max:10|distinct',
                 'voyageurs' => 'required|array|min:1',
                 'voyageurs.*.nom' => 'required|string',
                 'voyageurs.*.prenom' => 'required|string',
@@ -204,36 +161,97 @@ class ReservationController extends Controller
                 'voyageurs.*.phone2' => 'required|string',
                 'voyageurs.*.cin' => 'nullable|string',
                 'voyageurs.*.age' => 'nullable|integer',
-                'voyageurs.*.siege_numero' => 'required|string',
+                'voyageurs.*.siege_numero' => 'required|string|distinct',
             ]);
 
-            return DB::transaction(function () use ($request) {
+            // Cohérence : un voyageur par siège, et exactement les sièges demandés
+            $siegesNumeros = array_map('strval', $request->sieges);
+            $siegesVoyageurs = array_map(fn($v) => (string) $v['siege_numero'], $request->voyageurs);
+            $siegesTries = $siegesNumeros;
+            sort($siegesTries);
+            sort($siegesVoyageurs);
+
+            if ((int) $request->nb_voyageurs !== count($siegesNumeros)
+                || $siegesTries !== $siegesVoyageurs) {
+                return response()->json([
+                    'statut' => false,
+                    'message' => 'Le nombre de voyageurs doit correspondre aux sièges sélectionnés (un voyageur par siège).'
+                ], 422);
+            }
+
+            // Libérer d'abord les réservations expirées de CE voyage : sans cela,
+            // elles occupent encore places_reservees jusqu'au passage de la tâche
+            // planifiée (≤ 1 min) et pourraient faire refuser cette réservation.
+            $this->reservationExpireeService->liberer((int) $request->voyage_id);
+
+            return DB::transaction(function () use ($request, $siegesNumeros, $siegesTries) {
                 $utilisateur = Auth::user();
-                $voyageId = $request->voyage_id;
-                $siegesNumeros = $request->sieges;
+                $voyageId = (int) $request->voyage_id;
 
-                // 1. Vérifier la disponibilité des sièges
-                foreach ($siegesNumeros as $numero) {
-                    $siege = SiegeReserve::firstOrCreate(
-                        ['voyage_id' => $voyageId, 'siege_numero' => $numero],
-                        ['siege_statut' => 2]
-                    );
+                // 1. Verrouiller le voyage : les réservations d'un même voyage sont
+                //    traitées l'une après l'autre (pas de double attribution de siège).
+                $voyage = Voyage::with(['trajet.compagnie', 'voiture.planSiege'])
+                    ->where('voyage_id', $voyageId)
+                    ->lockForUpdate()
+                    ->firstOrFail();
 
+                $compagnie = $voyage->trajet?->compagnie;
+                if ((int) $voyage->voyage_statut !== 1
+                    || !$voyage->voyage_is_active
+                    || !$voyage->estFutur()
+                    || !$compagnie
+                    || (int) $compagnie->comp_statut !== 1
+                    || $compagnie->comp_suspendu_commission) {
+                    throw new \Exception('Ce voyage n\'est plus ouvert aux réservations.');
+                }
+
+                // 2. Les sièges doivent exister dans le plan du véhicule
+                $planSiege = $voyage->voiture?->planSiege;
+                if (!$planSiege) {
+                    throw new \Exception('Aucun plan de sièges configuré pour ce véhicule.');
+                }
+                $codesPlan = array_map(fn($s) => (string) $s['code'], $planSiege->getSiegesParses());
+                $inconnus = array_diff($siegesNumeros, $codesPlan);
+                if (!empty($inconnus)) {
+                    throw new \Exception('Siège(s) inexistant(s) : ' . implode(', ', $inconnus) . '.');
+                }
+
+                // 3. Verrouiller les sièges demandés (création si première réservation),
+                //    dans un ordre stable pour éviter les interblocages.
+                $maintenant = now();
+                SiegeReserve::insertOrIgnore(array_map(fn($numero) => [
+                    'voyage_id' => $voyageId,
+                    'siege_numero' => $numero,
+                    'siege_statut' => 2,
+                    'created_at' => $maintenant,
+                    'updated_at' => $maintenant,
+                ], $siegesTries));
+
+                $sieges = SiegeReserve::where('voyage_id', $voyageId)
+                    ->whereIn('siege_numero', $siegesTries)
+                    ->orderBy('siege_numero')
+                    ->lockForUpdate()
+                    ->get();
+
+                foreach ($sieges as $siege) {
                     if (!$siege->estDisponible()) {
-                        throw new \Exception("Le siège $numero n'est plus disponible.");
+                        throw new \Exception("Le siège {$siege->siege_numero} n'est plus disponible.");
                     }
                 }
 
-                // 2. Créer la réservation (Statut 1: En attente)
+                // 4. Montant calculé côté serveur (le prix VIP/premium est déjà dans le tarif du trajet)
+                $montantTotal = round((float) $voyage->trajet->traj_tarif * count($siegesNumeros), 2);
+
+                // 5. Créer la réservation (Statut 1: En attente)
                 $reservation = Reservation::create([
                     'res_numero' => 'RES-' . strtoupper(substr(uniqid(), -8)),
                     'util_id' => $utilisateur->util_id,
                     'voyage_id' => $voyageId,
                     'res_statut' => 1,
-                    'nb_voyageurs' => $request->nb_voyageurs,
-                    'montant_total' => $request->montant_total,
+                    'nb_voyageurs' => count($siegesNumeros),
+                    'montant_total' => $montantTotal,
                     'montant_avance' => 0,
-                    'montant_restant' => $request->montant_total,
+                    'montant_restant' => $montantTotal,
                     'date_limite_paiement' => now()->addMinutes(2),
                 ]);
 
@@ -285,6 +303,7 @@ class ReservationController extends Controller
                     'data' => [
                         'res_id' => $reservation->res_id,
                         'res_numero' => $reservation->res_numero,
+                        'montant_total' => (float) $reservation->montant_total,
                         'date_limite_paiement' => $reservation->date_limite_paiement->toIso8601String()
                     ]
                 ]);
@@ -293,7 +312,7 @@ class ReservationController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut' => false,
-                'message' => 'Erreur lors de la création de la réservation: ' . $e->getMessage()
+                'message' => 'Erreur lors de la création de la réservation: ' . $this->messageErreur($e)
             ], 400);
         }
     }
@@ -305,7 +324,8 @@ class ReservationController extends Controller
     public function confirm(Request $request, int $id): JsonResponse
     {
         try {
-            $reservation = Reservation::findOrFail($id);
+            // Seul le propriétaire peut confirmer sa réservation
+            $reservation = Reservation::where('util_id', Auth::id())->findOrFail($id);
 
             if ($reservation->res_statut != 1) {
                 return response()->json(['statut' => false, 'message' => 'Cette réservation ne peut plus être confirmée.'], 400);
@@ -345,6 +365,18 @@ class ReservationController extends Controller
             }
 
             DB::transaction(function() use ($reservation, $request, $numeroPaiement) {
+                // Re-vérifier sous verrou : la tâche de libération des réservations
+                // expirées a pu passer entre les contrôles ci-dessus et maintenant.
+                $verrouillee = Reservation::where('res_id', $reservation->res_id)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (!$verrouillee
+                    || $verrouillee->res_statut != 1
+                    || ($verrouillee->date_limite_paiement && now()->greaterThan($verrouillee->date_limite_paiement))) {
+                    throw new \Exception('Le délai de confirmation est dépassé.');
+                }
+
                 $reservation->update([
                     'res_statut' => 2, // Confirmé
                     'type_paie_id' => $request->type_paie_id,
@@ -402,7 +434,7 @@ class ReservationController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut' => false,
-                'message' => 'Erreur lors de la confirmation: ' . $e->getMessage()
+                'message' => 'Erreur lors de la confirmation: ' . $this->messageErreur($e)
             ], 400);
         }
     }
@@ -457,14 +489,14 @@ class ReservationController extends Controller
 
         } catch (\Exception $e) {
             Log::error('Erreur annulerReservation detaillee:', [
-                'message' => $e->getMessage(),
+                'message' => $this->messageErreur($e),
                 'reservation_id' => $id,
                 'file' => $e->getFile(),
                 'line' => $e->getLine()
             ]);
             return response()->json([
                 'statut' => false,
-                'message' => 'Erreur lors de l’annulation: ' . $e->getMessage()
+                'message' => 'Erreur lors de l’annulation: ' . $this->messageErreur($e)
             ], 400);
         }
     }
@@ -483,7 +515,10 @@ class ReservationController extends Controller
                 'voyage.voiture.chauffeur',
                 'voyageurs',
                 'utilisateur'
-            ])->findOrFail($id);
+            ])
+                // Seul le propriétaire peut consulter son billet (QR code, données personnelles)
+                ->where('util_id', Auth::id())
+                ->findOrFail($id);
 
             $typePaiement = null;
             if ($reservation->type_paie_id) {
@@ -547,7 +582,7 @@ class ReservationController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'statut' => false,
-                'message' => 'Erreur lors de la récupération de la facture: ' . $e->getMessage()
+                'message' => 'Erreur lors de la récupération de la facture: ' . $this->messageErreur($e)
             ], 404);
         }
     }

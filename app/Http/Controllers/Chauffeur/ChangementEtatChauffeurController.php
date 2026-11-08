@@ -40,10 +40,10 @@ class ChangementEtatChauffeurController extends Controller
 
         if ($statutActuel === 1) {
             $nouveauStatut = 2;
-            $messageRetour = 'Chauffeur activé avec succès';
+            $messageRetour = 'Chauffeur désactivé avec succès';
         } elseif ($statutActuel === 2) {
             $nouveauStatut = 1;
-            $messageRetour = 'Chauffeur désactivé avec succès';
+            $messageRetour = 'Chauffeur activé avec succès';
         } elseif ($statutActuel === 3) {
             return response()->json([
                 'statut' => false,

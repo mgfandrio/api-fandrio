@@ -170,10 +170,10 @@ class TrajetController extends Controller
     {
         try {
             $request->validate([
-                'statut'    => 'equired|integer|in:1,2' // 1: actif, 2: inactif
+                'statut'    => 'required|integer|in:1,2' // 1: actif, 2: inactif
             ]);
 
-            $trajet = $request->trajetService->changerStatutTrajet($id, $request->statut);
+            $trajet = $this->trajetService->changerStatutTrajet($id, $request->statut);
 
             $message = $request->statut == 1 ? 'Trajet activé avec succès' : 'Trajet désactivé avec succès';
 

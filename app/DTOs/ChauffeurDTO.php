@@ -75,7 +75,7 @@ class ChauffeurDTO
             'chauff_nom'    => 'sometimes|required|string|max:100',
             'chauff_prenom' => 'sometimes|required|string|max:100',
             'chauff_age'    => 'sometimes|required|integer|min:18',
-            'chauff_cin'    => 'sometimes|required|string|unique:chauffeurs,chauff_cin' . $idChauffeur . ',chauff_id',
+            'chauff_cin'    => 'sometimes|required|string|unique:chauffeurs,chauff_cin,' . $idChauffeur . ',chauff_id',
             'chauff_permis' => 'sometimes|required|string|in:A,B,C,D',
             'chauff_phone'  => 'sometimes|required|string|max:20',
             'chauff_statut' => 'sometimes|required|integer',

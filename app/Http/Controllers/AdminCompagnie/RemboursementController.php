@@ -48,7 +48,7 @@ class RemboursementController extends Controller
             $perPage = (int) $request->query('per_page', 15);
 
             $query = Reservation::with([
-                'utilisateur:util_id,util_nom,util_prenom,util_email,util_tel',
+                'utilisateur:util_id,util_nom,util_prenom,util_email,util_phone',
                 'voyage.trajet.provinceDepart:pro_id,pro_nom',
                 'voyage.trajet.provinceArrivee:pro_id,pro_nom',
             ])
@@ -78,7 +78,8 @@ class RemboursementController extends Controller
                 ->orderBy('updated_at', 'desc')
                 ->paginate($perPage);
 
-            $items = $page->getCollection()->map(function (Reservation $r) {
+            $typesPaiement = \App\Models\Paiements\TypePaiement::pluck('type_paie_nom', 'type_paie_id');
+            $items = $page->getCollection()->map(function (Reservation $r) use ($typesPaiement) {
                 $depart = $r->voyage?->trajet?->provinceDepart?->pro_nom ?? 'N/A';
                 $arrivee = $r->voyage?->trajet?->provinceArrivee?->pro_nom ?? 'N/A';
                 return [
@@ -88,7 +89,7 @@ class RemboursementController extends Controller
                         'util_id' => $r->utilisateur?->util_id,
                         'nom' => trim(($r->utilisateur?->util_prenom ?? '') . ' ' . ($r->utilisateur?->util_nom ?? '')),
                         'email' => $r->utilisateur?->util_email,
-                        'telephone' => $r->utilisateur?->util_tel,
+                        'telephone' => $r->utilisateur?->util_phone,
                     ],
                     'voyage' => [
                         'trajet' => "{$depart} → {$arrivee}",
@@ -100,6 +101,13 @@ class RemboursementController extends Controller
                     'date_traitement' => $r->res_remb_date?->format('d/m/Y H:i'),
                     'reference' => $r->res_remb_reference,
                     'note' => $r->res_remb_note,
+                    // Pourquoi rembourser : voyage annulé par la compagnie, ou paiement arrivé après le délai
+                    'motif' => (int) ($r->voyage?->voyage_statut) === 4 ? 'voyage_annule' : 'paiement_tardif',
+                    // Où renvoyer l'argent : moyen et numéro utilisés pour payer
+                    'paiement' => [
+                        'type' => $r->type_paie_id ? ($typesPaiement[$r->type_paie_id] ?? null) : null,
+                        'numero' => $r->numero_paiement,
+                    ],
                     'date_annulation' => $r->updated_at?->format('d/m/Y H:i'),
                 ];
             });

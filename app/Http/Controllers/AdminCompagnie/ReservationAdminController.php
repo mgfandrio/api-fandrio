@@ -209,7 +209,7 @@ class ReservationAdminController extends Controller
                         'client' => $reservation->utilisateur ? [
                             'nom' => $reservation->utilisateur->util_nom,
                             'prenom' => $reservation->utilisateur->util_prenom,
-                            'telephone' => $reservation->utilisateur->util_telephone,
+                            'telephone' => $reservation->utilisateur->util_phone,
                         ] : null,
                     ];
                 }
@@ -763,7 +763,7 @@ class ReservationAdminController extends Controller
                     ],
                     'client' => $reservation->utilisateur ? [
                         'nom' => ($reservation->utilisateur->util_prenom ?? '') . ' ' . ($reservation->utilisateur->util_nom ?? ''),
-                        'telephone' => $reservation->utilisateur->util_telephone ?? '',
+                        'telephone' => $reservation->utilisateur->util_phone ?? '',
                     ] : null,
                     'voyageurs' => $voyageurs,
                 ]

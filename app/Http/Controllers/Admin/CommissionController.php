@@ -13,11 +13,101 @@ use App\Models\Utilisateurs\Utilisateur;
 use App\Services\Notification\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class CommissionController extends Controller
 {
     private float $tauxCommission = 0.05; // 5%
+
+    /**
+     * Évolution mois par mois de la plateforme (graphiques de l'accueil admin système).
+     *
+     * Pour chaque mois des N derniers (défaut 12, mois en cours compris) :
+     *   - commission, brut, billets       : réservations confirmées (res_statut 2) du mois
+     *   - clients_nouveaux                : comptes clients créés dans le mois
+     *   - clients_actifs                  : clients distincts ayant payé au moins un billet dans le mois
+     *   - clients_perdus                  : clients actifs le mois précédent sans achat ce mois-ci
+     *   - compagnies_nouvelles            : compagnies créées dans le mois
+     *   - compagnies_actives              : compagnies distinctes ayant vendu au moins un billet dans le mois
+     *
+     * GET /admin/commissions/evolution?mois=12 — mis en cache 10 minutes.
+     */
+    public function evolution(Request $request): JsonResponse
+    {
+        try {
+            $nbMois = max(3, min(24, (int) $request->query('mois', 12)));
+
+            $donnees = Cache::remember("admin:evolution:{$nbMois}", 600, function () use ($nbMois) {
+                // Un mois de plus en amont pour calculer les clients perdus du premier mois affiché
+                $debut = now()->startOfMonth()->subMonths($nbMois);
+                $res = (new Reservation)->getTable();
+                $voy = (new Voyage)->getTable();
+                $traj = (new \App\Models\Trajet\Trajet)->getTable();
+                $util = (new Utilisateur)->getTable();
+                $comp = (new Compagnie)->getTable();
+                $mois = "TO_CHAR(%s, 'YYYY-MM')";
+
+                $ventes = DB::table($res)
+                    ->where('res_statut', 2)->where('created_at', '>=', $debut)
+                    ->selectRaw(sprintf($mois, 'created_at') . ' as mois, SUM(montant_total) as brut, SUM(nb_voyageurs) as billets')
+                    ->groupBy('mois')->get()->keyBy('mois');
+
+                // Paires (client, mois) d'achat : sert aux actifs et aux perdus
+                $achats = DB::table($res)
+                    ->where('res_statut', 2)->where('created_at', '>=', $debut)
+                    ->selectRaw(sprintf($mois, 'created_at') . ' as mois, util_id')
+                    ->distinct()->get()
+                    ->groupBy('mois')->map(fn($l) => $l->pluck('util_id')->all());
+
+                $nouveauxClients = DB::table($util)
+                    ->where('util_role', 1)->where('created_at', '>=', $debut)
+                    ->selectRaw(sprintf($mois, 'created_at') . ' as mois, COUNT(*) as n')
+                    ->groupBy('mois')->pluck('n', 'mois');
+
+                $nouvellesCompagnies = DB::table($comp)
+                    ->where('created_at', '>=', $debut)
+                    ->selectRaw(sprintf($mois, 'created_at') . ' as mois, COUNT(*) as n')
+                    ->groupBy('mois')->pluck('n', 'mois');
+
+                $compagniesActives = DB::table("{$res} as r")
+                    ->join("{$voy} as v", 'v.voyage_id', '=', 'r.voyage_id')
+                    ->join("{$traj} as t", 't.traj_id', '=', 'v.traj_id')
+                    ->where('r.res_statut', 2)->where('r.created_at', '>=', $debut)
+                    ->selectRaw(sprintf($mois, 'r.created_at') . ' as mois, COUNT(DISTINCT t.comp_id) as n')
+                    ->groupBy('mois')->pluck('n', 'mois');
+
+                $resultat = [];
+                for ($i = $nbMois - 1; $i >= 0; $i--) {
+                    $m = now()->startOfMonth()->subMonths($i);
+                    $cle = $m->format('Y-m');
+                    $precedent = $m->copy()->subMonth()->format('Y-m');
+                    $actifs = $achats->get($cle, []);
+                    $actifsAvant = $achats->get($precedent, []);
+                    $brut = (float) ($ventes[$cle]->brut ?? 0);
+                    $resultat[] = [
+                        'mois'                 => $cle,
+                        'brut'                 => $brut,
+                        'commission'           => round($brut * $this->tauxCommission, 2),
+                        'billets'              => (int) ($ventes[$cle]->billets ?? 0),
+                        'clients_nouveaux'     => (int) ($nouveauxClients[$cle] ?? 0),
+                        'clients_actifs'       => count($actifs),
+                        'clients_perdus'       => count(array_diff($actifsAvant, $actifs)),
+                        'compagnies_nouvelles' => (int) ($nouvellesCompagnies[$cle] ?? 0),
+                        'compagnies_actives'   => (int) ($compagniesActives[$cle] ?? 0),
+                    ];
+                }
+                return $resultat;
+            });
+
+            return response()->json([
+                'statut' => true,
+                'data'   => ['taux_commission' => $this->tauxCommission * 100, 'mois' => $donnees],
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['statut' => false, 'message' => 'Erreur: ' . $this->messageErreur($e)], 500);
+        }
+    }
 
     /**
      * Tableau de bord global des commissions (vue d'ensemble)

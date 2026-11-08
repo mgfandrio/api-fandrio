@@ -196,6 +196,7 @@ Route::middleware(['api.key', 'auth:api', 'role:3'])->prefix('admin')->group(fun
     // Gestion des commissions
     Route::prefix('commissions')->group(function () {
         Route::get('/dashboard', [CommissionController::class, 'dashboard']);
+        Route::get('/evolution', [CommissionController::class, 'evolution']);
         Route::get('/compagnies', [CommissionController::class, 'listeCompagnies']);
         Route::get('/compagnies/{compagnieId}', [CommissionController::class, 'detailCompagnie']);
         Route::patch('/{commId}/statut', [CommissionController::class, 'confirmerReception']);

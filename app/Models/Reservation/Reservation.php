@@ -36,7 +36,12 @@ class Reservation extends Model
         'res_commission',
         'res_commission_taux',
         'coll_id',
+        'res_canal',
     ];
+
+    /** Canal de vente (res_canal) */
+    public const CANAL_EN_LIGNE = 1;
+    public const CANAL_GUICHET = 2;
 
     /**
      * Convertir les types de données pour les colonnes.

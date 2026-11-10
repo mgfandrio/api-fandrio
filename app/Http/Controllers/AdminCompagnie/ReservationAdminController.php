@@ -13,6 +13,12 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use App\Events\SiegeUpdated;
+use App\Models\Reservation\ReservationVoyageur;
+use App\Models\Voitures\SiegeReserve;
+use App\Models\Voyageur\Voyageur;
+use App\Services\Reservation\ReservationExpireeService;
+use Illuminate\Support\Facades\Log;
 
 class ReservationAdminController extends Controller
 {
@@ -210,6 +216,7 @@ class ReservationAdminController extends Controller
                         'phone2' => $voyageur->voya_phone2,
                         'siege' => $voyageur->pivot->place_numero,
                         'embarque' => ($voyageur->pivot->res_voya_statut ?? 1) >= 2,
+                        'canal' => (int) $reservation->res_canal === Reservation::CANAL_GUICHET ? 'guichet' : 'en_ligne',
                         'client' => $reservation->utilisateur ? [
                             'nom' => $reservation->utilisateur->util_nom,
                             'prenom' => $reservation->utilisateur->util_prenom,
@@ -278,6 +285,7 @@ class ReservationAdminController extends Controller
                         'nom' => $typesPaiement[$res->type_paie_id] ?? 'Non défini',
                     ],
                     'numero_paiement' => $res->numero_paiement,
+                    'canal' => (int) $res->res_canal === Reservation::CANAL_GUICHET ? 'guichet' : 'en_ligne',
                     'client' => $res->utilisateur ? [
                         'nom' => $res->utilisateur->util_nom,
                         'prenom' => $res->utilisateur->util_prenom,
@@ -374,6 +382,7 @@ class ReservationAdminController extends Controller
                         'montant_total' => (float) $res->montant_total,
                         'nb_voyageurs' => $res->nb_voyageurs,
                         'type_paiement' => $typesPaiement[$res->type_paie_id] ?? 'Non défini',
+                        'canal' => (int) $res->res_canal === Reservation::CANAL_GUICHET ? 'guichet' : 'en_ligne',
                         'client' => $res->utilisateur ? ($res->utilisateur->util_prenom . ' ' . $res->utilisateur->util_nom) : null,
                         'trajet' => $res->voyage?->trajet ? ($res->voyage->trajet->provinceDepart->pro_nom . ' → ' . $res->voyage->trajet->provinceArrivee->pro_nom) : null,
                         'voyage_date' => $res->voyage?->voyage_date?->format('d/m/Y'),
@@ -523,6 +532,7 @@ class ReservationAdminController extends Controller
                     'date' => $res->created_at->format('d/m/Y H:i'),
                     'montant' => (float)$res->montant_total,
                     'nb_voyageurs' => $res->nb_voyageurs,
+                    'canal' => (int) $res->res_canal === Reservation::CANAL_GUICHET ? 'guichet' : 'en_ligne',
                     'client' => $res->utilisateur ? ($res->utilisateur->util_prenom . ' ' . $res->utilisateur->util_nom) : null,
                     'trajet' => $res->voyage?->trajet ? ($res->voyage->trajet->provinceDepart->pro_nom . ' → ' . $res->voyage->trajet->provinceArrivee->pro_nom) : null,
                     'type_paiement' => $typesPaiement[$res->type_paie_id] ?? null,
@@ -621,6 +631,7 @@ class ReservationAdminController extends Controller
                     'res_numero' => $res->res_numero,
                     'date' => $res->created_at->format('d/m/Y H:i'),
                     'date_raw' => $res->created_at->toISOString(),
+                    'canal' => (int) $res->res_canal === Reservation::CANAL_GUICHET ? 'guichet' : 'en_ligne',
                     'client' => $res->utilisateur ? [
                         'nom' => $res->utilisateur->util_prenom . ' ' . $res->utilisateur->util_nom,
                         'telephone' => $res->utilisateur->util_phone,
@@ -675,13 +686,18 @@ class ReservationAdminController extends Controller
                 'qr_data' => 'required|string'
             ]);
 
-            // Décoder le QR (base64 → JSON)
-            $decoded = base64_decode($request->qr_data, true);
-            if (!$decoded) {
+            // Le QR affiché par l'application contient le JSON en clair ; on accepte
+            // aussi l'ancien format encodé en base64.
+            $brut = trim((string) $request->qr_data);
+            $qrInfo = json_decode($brut, true);
+            if (!is_array($qrInfo)) {
+                $decoded = base64_decode($brut, true);
+                $qrInfo = $decoded ? json_decode($decoded, true) : null;
+            }
+            if (!is_array($qrInfo)) {
                 return response()->json(['statut' => false, 'message' => 'QR Code invalide.', 'validation' => 'invalide'], 400);
             }
 
-            $qrInfo = json_decode($decoded, true);
             if (!$qrInfo || ($qrInfo['app'] ?? '') !== 'FANDRIO') {
                 return response()->json(['statut' => false, 'message' => 'Ce QR Code n\'est pas un billet FANDRIO.', 'validation' => 'invalide'], 400);
             }
@@ -766,6 +782,7 @@ class ReservationAdminController extends Controller
                         'heure' => $voyage->voyage_heure_depart,
                         'trajet' => ($voyage->trajet->provinceDepart->pro_nom ?? '') . ' → ' . ($voyage->trajet->provinceArrivee->pro_nom ?? ''),
                     ],
+                    'canal' => (int) $reservation->res_canal === Reservation::CANAL_GUICHET ? 'guichet' : 'en_ligne',
                     'client' => $reservation->utilisateur ? [
                         'nom' => ($reservation->utilisateur->util_prenom ?? '') . ' ' . ($reservation->utilisateur->util_nom ?? ''),
                         'telephone' => $reservation->utilisateur->util_phone ?? '',
@@ -832,6 +849,198 @@ class ReservationAdminController extends Controller
     }
 
     /**
+     * Vente au guichet : réservation faite sur place par la compagnie, payée en espèces.
+     * Créée directement confirmée (statut 2), canal guichet, SANS commission FANDRIO.
+     * POST /api/adminCompagnie/reservations/guichet
+     *
+     * Corps : voyage_id, voyageurs[{siege, nom, prenom?, telephone?}], embarquer? (bool)
+     */
+    public function venteGuichet(Request $request): JsonResponse
+    {
+        try {
+            $request->validate([
+                'voyage_id' => 'required|integer',
+                'voyageurs' => 'required|array|min:1|max:60',
+                'voyageurs.*.siege' => 'required|string|max:10|distinct',
+                'voyageurs.*.nom' => 'required|string|max:100',
+                'voyageurs.*.prenom' => 'nullable|string|max:100',
+                'voyageurs.*.telephone' => 'nullable|string|max:20',
+                'embarquer' => 'sometimes|boolean',
+            ]);
+
+            $compagnieId = $this->getCompagnieId();
+            $admin = Auth::user();
+            $voyageId = (int) $request->voyage_id;
+            $sieges = array_map(fn($v) => (string) $v['siege'], $request->voyageurs);
+            $siegesTries = $sieges;
+            sort($siegesTries);
+
+            // Libérer d'abord les réservations en ligne expirées de ce voyage
+            app(ReservationExpireeService::class)->liberer($voyageId);
+
+            $resultat = DB::transaction(function () use ($request, $compagnieId, $admin, $voyageId, $sieges, $siegesTries) {
+                $voyage = Voyage::with(['trajet.provinceDepart', 'trajet.provinceArrivee', 'voiture.planSiege'])
+                    ->where('voyage_id', $voyageId)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (!$voyage || !$voyage->trajet || (int) $voyage->trajet->comp_id !== $compagnieId) {
+                    throw new \RuntimeException('Voyage introuvable.');
+                }
+                // Programmé ou en cours (embarquement), actif, et pas un jour passé
+                if (!in_array((int) $voyage->voyage_statut, [1, 2], true)
+                    || !$voyage->voyage_is_active
+                    || $voyage->voyage_date->lt(today())) {
+                    throw new \RuntimeException("Ce voyage n'est plus ouvert à la vente.");
+                }
+
+                $planSiege = $voyage->voiture?->planSiege;
+                if (!$planSiege) {
+                    throw new \RuntimeException('Aucun plan de sièges configuré pour ce véhicule.');
+                }
+                $codesPlan = array_map(fn($s) => (string) $s['code'], $planSiege->getSiegesParses());
+                $inconnus = array_diff($sieges, $codesPlan);
+                if (!empty($inconnus)) {
+                    throw new \RuntimeException('Siège(s) inexistant(s) : ' . implode(', ', $inconnus) . '.');
+                }
+
+                // Verrouiller les sièges (ordre stable : pas d'interblocage)
+                $maintenant = now();
+                SiegeReserve::insertOrIgnore(array_map(fn($numero) => [
+                    'voyage_id' => $voyageId,
+                    'siege_numero' => $numero,
+                    'siege_statut' => 2,
+                    'created_at' => $maintenant,
+                    'updated_at' => $maintenant,
+                ], $siegesTries));
+
+                $siegesVerrouilles = SiegeReserve::where('voyage_id', $voyageId)
+                    ->whereIn('siege_numero', $siegesTries)
+                    ->orderBy('siege_numero')
+                    ->lockForUpdate()
+                    ->get();
+
+                foreach ($siegesVerrouilles as $siege) {
+                    if (!$siege->estDisponible()) {
+                        throw new \RuntimeException("Le siège {$siege->siege_numero} n'est plus disponible.");
+                    }
+                }
+
+                $montantTotal = round((float) $voyage->trajet->traj_tarif * count($sieges), 2);
+                $typeEspeces = TypePaiement::whereIn('type_paie_nom', ['Cash', 'Espèces'])->value('type_paie_id');
+
+                $reservation = Reservation::create([
+                    'res_numero' => 'GUI-' . strtoupper(substr(uniqid(), -8)),
+                    'util_id' => $admin->util_id, // vendeur (colonne NOT NULL)
+                    'voyage_id' => $voyageId,
+                    'res_statut' => 2, // payée sur place
+                    'nb_voyageurs' => count($sieges),
+                    'montant_total' => $montantTotal,
+                    'montant_avance' => $montantTotal,
+                    'montant_restant' => 0,
+                    'type_paie_id' => $typeEspeces,
+                    'res_canal' => Reservation::CANAL_GUICHET,
+                    'res_commission' => 0, // pas de commission FANDRIO au guichet
+                    'res_commission_taux' => 0,
+                ]);
+                $reservation->refresh(); // res_numero est attribué par un trigger SQL
+
+                $embarquer = $request->boolean('embarquer');
+                $voyageurs = [];
+                foreach ($request->voyageurs as $v) {
+                    $voyageur = Voyageur::create([
+                        'voya_nom' => trim($v['nom']),
+                        'voya_prenom' => trim($v['prenom'] ?? ''),
+                        'voya_phone' => $v['telephone'] ?? null,
+                        'util_id' => $admin->util_id,
+                    ]);
+                    ReservationVoyageur::create([
+                        'res_id' => $reservation->res_id,
+                        'voya_id' => $voyageur->voya_id,
+                        'place_numero' => $v['siege'],
+                        'res_voya_statut' => $embarquer ? 2 : 1,
+                    ]);
+                    $voyageurs[] = [
+                        'id' => $voyageur->voya_id,
+                        'nom' => trim(($v['prenom'] ?? '') . ' ' . $v['nom']),
+                        'siege' => (string) $v['siege'],
+                        'embarque' => $embarquer,
+                    ];
+                }
+
+                SiegeReserve::where('voyage_id', $voyageId)
+                    ->whereIn('siege_numero', $siegesTries)
+                    ->update([
+                        'siege_statut' => 1,
+                        'res_id' => $reservation->res_id,
+                        'utilisateur_id' => $admin->util_id,
+                        'expire_lock' => null,
+                    ]);
+
+                $trajet = ($voyage->trajet->provinceDepart->pro_nom ?? '') . ' → ' . ($voyage->trajet->provinceArrivee->pro_nom ?? '');
+
+                return [
+                    'reservation' => $reservation,
+                    'voyageurs' => $voyageurs,
+                    'trajet' => $trajet,
+                    'voyage' => $voyage,
+                ];
+            });
+
+            $reservation = $resultat['reservation'];
+
+            // Temps réel : les sièges vendus disparaissent du plan des clients
+            foreach ($sieges as $numero) {
+                try {
+                    broadcast(new SiegeUpdated(
+                        $voyageId,
+                        $numero,
+                        'reserve',
+                        $admin->util_id,
+                        ['siege' => $numero, 'statut' => 1, 'disponible' => false, 'utilisateur_id' => $admin->util_id, 'expire_lock' => null]
+                    ));
+                } catch (\Throwable $e) {
+                    Log::warning('Broadcast siège (guichet) échoué : ' . $e->getMessage());
+                }
+            }
+
+            // Même format de QR que les billets en ligne : scannable à l'embarquement
+            $qrData = base64_encode(json_encode([
+                'app' => 'FANDRIO',
+                'res_numero' => $reservation->res_numero,
+                'res_id' => $reservation->res_id,
+                'client' => ['nom' => $resultat['voyageurs'][0]['nom'] ?? '', 'telephone' => ''],
+                'voyage_id' => $voyageId,
+                'trajet' => $resultat['trajet'],
+            ]));
+
+            return response()->json([
+                'statut' => true,
+                'message' => count($sieges) > 1 ? count($sieges) . ' places vendues.' : 'Place vendue.',
+                'data' => [
+                    'res_id' => $reservation->res_id,
+                    'res_numero' => $reservation->res_numero,
+                    'montant_total' => (float) $reservation->montant_total,
+                    'trajet' => $resultat['trajet'],
+                    'date' => $resultat['voyage']->voyage_date->format('d/m/Y'),
+                    'heure' => $resultat['voyage']->voyage_heure_depart,
+                    'voyageurs' => $resultat['voyageurs'],
+                    'qr_data' => $qrData,
+                ],
+            ], 201);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            throw $e;
+        } catch (\RuntimeException $e) {
+            return response()->json(['statut' => false, 'message' => $e->getMessage()], 400);
+        } catch (\Exception $e) {
+            return response()->json([
+                'statut' => false,
+                'message' => 'Erreur lors de la vente : ' . $this->messageErreur($e),
+            ], 500);
+        }
+    }
+
+    /**
      * Portefeuille de la compagnie — vue financière avec commission plateforme
      * Commission FANDRIO : 5% par billet vendu (par voyageur)
      * GET /api/adminCompagnie/reservations/portefeuille
@@ -849,9 +1058,12 @@ class ReservationAdminController extends Controller
                 ->whereIn('res_statut', self::STATUTS_ENCAISSES);
 
             // ── Solde global ──
+            // Commission FANDRIO : sur les ventes EN LIGNE uniquement (le guichet n'en paie pas)
+            $enLigne = fn($q) => (float)(clone $q)->where('res_canal', Reservation::CANAL_EN_LIGNE)->sum('montant_total');
             $revenuBrut = (float)(clone $reservationsBase)->sum('montant_total');
+            $revenuGuichet = round($revenuBrut - $enLigne($reservationsBase), 2);
             $totalBillets = (int)(clone $reservationsBase)->sum('nb_voyageurs');
-            $commissionTotale = round($revenuBrut * $tauxCommission, 2);
+            $commissionTotale = round($enLigne($reservationsBase) * $tauxCommission, 2);
             $revenuNet = round($revenuBrut - $commissionTotale, 2);
 
             // ── Solde par période ──
@@ -866,9 +1078,10 @@ class ReservationAdminController extends Controller
             foreach ($periodes as $key => $query) {
                 $brut = (float)(clone $query)->sum('montant_total');
                 $billets = (int)(clone $query)->sum('nb_voyageurs');
-                $commission = round($brut * $tauxCommission, 2);
+                $commission = round($enLigne($query) * $tauxCommission, 2);
                 $soldeParPeriode[$key] = [
                     'brut' => $brut,
+                    'guichet' => round($brut - $enLigne($query), 2),
                     'commission' => $commission,
                     'net' => round($brut - $commission, 2),
                     'billets' => $billets,
@@ -881,6 +1094,7 @@ class ReservationAdminController extends Controller
                 ->select(
                     DB::raw("TO_CHAR(created_at, 'YYYY-MM') as mois"),
                     DB::raw("SUM(montant_total) as brut"),
+                    DB::raw("SUM(CASE WHEN res_canal = 1 THEN montant_total ELSE 0 END) as brut_en_ligne"),
                     DB::raw("SUM(nb_voyageurs) as billets"),
                     DB::raw("COUNT(*) as nb_reservations")
                 )
@@ -890,8 +1104,8 @@ class ReservationAdminController extends Controller
                 ->map(fn($item) => [
                     'mois' => $item->mois,
                     'brut' => (float)$item->brut,
-                    'commission' => round((float)$item->brut * $tauxCommission, 2),
-                    'net' => round((float)$item->brut * (1 - $tauxCommission), 2),
+                    'commission' => round((float)$item->brut_en_ligne * $tauxCommission, 2),
+                    'net' => round((float)$item->brut - (float)$item->brut_en_ligne * $tauxCommission, 2),
                     'billets' => (int)$item->billets,
                     'nb_reservations' => (int)$item->nb_reservations,
                 ]);
@@ -899,15 +1113,15 @@ class ReservationAdminController extends Controller
             // ── Répartition par opérateur ──
             $typesPaiement = TypePaiement::pluck('type_paie_nom', 'type_paie_id');
             $repartitionOperateur = (clone $reservationsBase)
-                ->select('type_paie_id', DB::raw('SUM(montant_total) as brut'), DB::raw('SUM(nb_voyageurs) as billets'), DB::raw('COUNT(*) as nb_transactions'))
+                ->select('type_paie_id', DB::raw('SUM(montant_total) as brut'), DB::raw('SUM(CASE WHEN res_canal = 1 THEN montant_total ELSE 0 END) as brut_en_ligne'), DB::raw('SUM(nb_voyageurs) as billets'), DB::raw('COUNT(*) as nb_transactions'))
                 ->groupBy('type_paie_id')
                 ->get()
                 ->map(fn($item) => [
                     'operateur' => $typesPaiement[$item->type_paie_id] ?? 'Non défini',
                     'type_id' => $item->type_paie_id,
                     'brut' => (float)$item->brut,
-                    'commission' => round((float)$item->brut * $tauxCommission, 2),
-                    'net' => round((float)$item->brut * (1 - $tauxCommission), 2),
+                    'commission' => round((float)$item->brut_en_ligne * $tauxCommission, 2),
+                    'net' => round((float)$item->brut - (float)$item->brut_en_ligne * $tauxCommission, 2),
                     'billets' => (int)$item->billets,
                     'nb_transactions' => (int)$item->nb_transactions,
                 ]);
@@ -933,15 +1147,17 @@ class ReservationAdminController extends Controller
 
             $transactionsData = $transactions->getCollection()->map(function ($res) use ($typesPaiement, $tauxCommission) {
                 $brut = (float)$res->montant_total;
-                $commission = round($brut * $tauxCommission, 2);
+                $guichet = (int) $res->res_canal === Reservation::CANAL_GUICHET;
+                $commission = $guichet ? 0.0 : round($brut * $tauxCommission, 2);
                 return [
                     'res_id' => $res->res_id,
                     'res_numero' => $res->res_numero,
                     'date' => $res->created_at->format('d/m/Y H:i'),
                     'date_raw' => $res->created_at->toISOString(),
-                    'client' => $res->utilisateur
-                        ? ($res->utilisateur->util_prenom . ' ' . $res->utilisateur->util_nom)
-                        : null,
+                    'client' => $guichet
+                        ? 'Vente au guichet'
+                        : ($res->utilisateur ? ($res->utilisateur->util_prenom . ' ' . $res->utilisateur->util_nom) : null),
+                    'canal' => $guichet ? 'guichet' : 'en_ligne',
                     'trajet' => $res->voyage?->trajet
                         ? ($res->voyage->trajet->provinceDepart->pro_nom . ' → ' . $res->voyage->trajet->provinceArrivee->pro_nom)
                         : null,
@@ -964,6 +1180,7 @@ class ReservationAdminController extends Controller
                         'brut' => $revenuBrut,
                         'commission' => $commissionTotale,
                         'net' => $revenuNet,
+                        'guichet' => $revenuGuichet,
                         'total_billets' => $totalBillets,
                         'total_reservations' => (int)(clone $reservationsBase)->count(),
                     ],

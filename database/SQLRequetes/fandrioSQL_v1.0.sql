@@ -307,6 +307,8 @@ CREATE TABLE fandrio_app.reservations (
     res_commission DECIMAL(10,2) NULL,
     res_commission_taux DECIMAL(5,2) NULL,
     coll_id INTEGER NULL, -- FK ajoutée après la création de la table collectes (voir plus bas)
+    -- Canal de vente : 1 en ligne (application), 2 guichet (espèces, sans commission FANDRIO)
+    res_canal SMALLINT NOT NULL DEFAULT 1 CONSTRAINT reservations_res_canal_check CHECK (res_canal IN (1, 2)),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CHECK (montant_avance <= montant_total),
@@ -334,7 +336,7 @@ CREATE TABLE fandrio_app.reservation_voyageurs (
     res_id INTEGER NOT NULL REFERENCES fandrio_app.reservations(res_id) ON DELETE CASCADE,
     voya_id INTEGER NOT NULL REFERENCES fandrio_app.voyageurs(voya_id) ON DELETE CASCADE,
     place_numero INTEGER NOT NULL CHECK (place_numero > 0),
-    res_voya_statut INTEGER DEFAULT 1 CHECK (res_voya_statut IN (1, 2)), -- 1: confirmé, 2: annulé
+    res_voya_statut INTEGER DEFAULT 1 CHECK (res_voya_statut IN (1, 2)), -- 1: pas encore à bord, 2: embarqué
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(res_id, place_numero)
 );

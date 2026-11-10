@@ -4,6 +4,7 @@ namespace App\Services\Notification;
 
 use App\Jobs\EnvoyerPushNotification;
 use App\Models\Notifications\Notification;
+use App\Models\Reservation\Reservation;
 use App\Models\Utilisateurs\Utilisateur;
 
 class NotificationService
@@ -11,8 +12,15 @@ class NotificationService
     /**
      * Créer et envoyer une notification
      */
-    public static function envoyer(array $data): Notification
+    public static function envoyer(array $data): ?Notification
     {
+        // Billet vendu au guichet : le « client » enregistré est l'admin compagnie
+        // qui a fait la vente ; il ne doit pas recevoir les notifications client.
+        if ((int) ($data['destinataire_type'] ?? 0) === 1 && !empty($data['res_id'])
+            && Reservation::where('res_id', $data['res_id'])->where('res_canal', Reservation::CANAL_GUICHET)->exists()) {
+            return null;
+        }
+
         $notification = Notification::create([
             'notif_type' => $data['type'],
             'notif_destinataire_type' => $data['destinataire_type'],

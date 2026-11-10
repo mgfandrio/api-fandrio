@@ -302,6 +302,7 @@ Route::middleware(['api.key', 'auth:api', 'role:2'])->prefix('adminCompagnie')->
         Route::get('/factures', [ReservationAdminController::class, 'factures']);
         Route::post('/scanner-qr', [ReservationAdminController::class, 'scannerQR']);
         Route::post('/{resId}/embarquer', [ReservationAdminController::class, 'embarquer']);
+        Route::post('/guichet', [ReservationAdminController::class, 'venteGuichet']);
         Route::get('/portefeuille', [ReservationAdminController::class, 'portefeuille']);
         Route::get('/ma-collecte', [ReservationAdminController::class, 'maCollecte']);
     });

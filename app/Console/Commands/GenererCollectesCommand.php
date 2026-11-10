@@ -53,7 +53,7 @@ class GenererCollectesCommand extends Command
             // Billets FACTURABLES : réservations payées de voyages TERMINÉS dont la date
             // tombe dans la période, commission déjà figée, et pas encore facturées
             // (coll_id NULL → composition immuable, jamais facturé deux fois).
-            $billables = Reservation::where('res_statut', 2)
+            $billables = Reservation::whereIn('res_statut', [2, 6]) // 6 = annulée par le client, non remboursée : commission due
                 ->whereNull('coll_id')
                 ->whereNotNull('res_commission')
                 ->whereHas('voyage', function ($q) use ($compagnie, $periodeDebut, $periodeFin) {

@@ -143,6 +143,7 @@ Route::middleware(['api.key', 'auth:api'])->group(function () {
         Route::post('/{id}/confirm', [\App\Http\Controllers\Client\ReservationController::class, 'confirm']);
         Route::post('/{id}/payer', [\App\Http\Controllers\Client\ReservationPaiementController::class, 'payer']);
         Route::post('/{id}/cancel', [\App\Http\Controllers\Client\ReservationController::class, 'cancel']);
+        Route::post('/{id}/annuler-billet', [\App\Http\Controllers\Client\ReservationController::class, 'annulerBillet']);
         Route::get('/{id}/invoice', [\App\Http\Controllers\Client\ReservationController::class, 'getInvoice']);
     });
 

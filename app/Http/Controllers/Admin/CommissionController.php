@@ -24,7 +24,7 @@ class CommissionController extends Controller
      * Évolution mois par mois de la plateforme (graphiques de l'accueil admin système).
      *
      * Pour chaque mois des N derniers (défaut 12, mois en cours compris) :
-     *   - commission, brut, billets       : réservations confirmées (res_statut 2) du mois
+     *   - commission, brut, billets       : réservations confirmées (res_statut 2, et 6 : annulées par le client sans remboursement) du mois
      *   - clients_nouveaux                : comptes clients créés dans le mois
      *   - clients_actifs                  : clients distincts ayant payé au moins un billet dans le mois
      *   - clients_perdus                  : clients actifs le mois précédent sans achat ce mois-ci
@@ -49,13 +49,13 @@ class CommissionController extends Controller
                 $mois = "TO_CHAR(%s, 'YYYY-MM')";
 
                 $ventes = DB::table($res)
-                    ->where('res_statut', 2)->where('created_at', '>=', $debut)
+                    ->whereIn('res_statut', [2, 6])->where('created_at', '>=', $debut)
                     ->selectRaw(sprintf($mois, 'created_at') . ' as mois, SUM(montant_total) as brut, SUM(nb_voyageurs) as billets')
                     ->groupBy('mois')->get()->keyBy('mois');
 
                 // Paires (client, mois) d'achat : sert aux actifs et aux perdus
                 $achats = DB::table($res)
-                    ->where('res_statut', 2)->where('created_at', '>=', $debut)
+                    ->whereIn('res_statut', [2, 6])->where('created_at', '>=', $debut)
                     ->selectRaw(sprintf($mois, 'created_at') . ' as mois, util_id')
                     ->distinct()->get()
                     ->groupBy('mois')->map(fn($l) => $l->pluck('util_id')->all());
@@ -73,7 +73,7 @@ class CommissionController extends Controller
                 $compagniesActives = DB::table("{$res} as r")
                     ->join("{$voy} as v", 'v.voyage_id', '=', 'r.voyage_id')
                     ->join("{$traj} as t", 't.traj_id', '=', 'v.traj_id')
-                    ->where('r.res_statut', 2)->where('r.created_at', '>=', $debut)
+                    ->whereIn('r.res_statut', [2, 6])->where('r.created_at', '>=', $debut)
                     ->selectRaw(sprintf($mois, 'r.created_at') . ' as mois, COUNT(DISTINCT t.comp_id) as n')
                     ->groupBy('mois')->pluck('n', 'mois');
 
@@ -116,7 +116,7 @@ class CommissionController extends Controller
     {
         try {
             // ── Toutes les réservations confirmées (statut 2) ──
-            $reservationsBase = Reservation::where('res_statut', 2);
+            $reservationsBase = Reservation::whereIn('res_statut', [2, 6]);
 
             // ── Totaux globaux ──
             $revenuBrut     = (float)(clone $reservationsBase)->sum('montant_total');
@@ -182,7 +182,7 @@ class CommissionController extends Controller
                 ->join('fandrio_app.voyages as v', 'r.voyage_id', '=', 'v.voyage_id')
                 ->join('fandrio_app.trajets as t', 'v.traj_id', '=', 't.traj_id')
                 ->join('fandrio_app.compagnies as c', 't.comp_id', '=', 'c.comp_id')
-                ->where('r.res_statut', 2)
+                ->whereIn('r.res_statut', [2, 6])
                 ->select(
                     'c.comp_id',
                     'c.comp_nom',
@@ -258,7 +258,7 @@ class CommissionController extends Controller
             $voyageIds = Voyage::whereHas('trajet', fn($q) => $q->where('comp_id', $compagnieId))
                 ->pluck('voyage_id');
 
-            $reservationsBase = Reservation::whereIn('voyage_id', $voyageIds)->where('res_statut', 2);
+            $reservationsBase = Reservation::whereIn('voyage_id', $voyageIds)->whereIn('res_statut', [2, 6]);
 
             $revenuBrut     = (float)(clone $reservationsBase)->sum('montant_total');
             $totalBillets   = (int)(clone $reservationsBase)->sum('nb_voyageurs');
@@ -331,7 +331,7 @@ class CommissionController extends Controller
                 ->join('fandrio_app.voyages as v', 'r.voyage_id', '=', 'v.voyage_id')
                 ->join('fandrio_app.trajets as t', 'v.traj_id', '=', 't.traj_id')
                 ->join('fandrio_app.compagnies as c', 't.comp_id', '=', 'c.comp_id')
-                ->where('r.res_statut', 2)
+                ->whereIn('r.res_statut', [2, 6])
                 ->select(
                     'c.comp_id',
                     'c.comp_nom',

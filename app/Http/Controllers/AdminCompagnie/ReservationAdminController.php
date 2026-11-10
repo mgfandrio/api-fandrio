@@ -23,6 +23,9 @@ class ReservationAdminController extends Controller
      * du paiement par l'admin compagnie.
      */
     private const STATUTS_VALIDES = [2];
+    // Argent encaissé par la compagnie : billets confirmés + billets annulés par le
+    // client sans remboursement (6). La commission FANDRIO reste due sur ces derniers.
+    private const STATUTS_ENCAISSES = [2, 6];
 
     public function __construct(private SiegeService $siegeService) {}
 
@@ -336,7 +339,7 @@ class ReservationAdminController extends Controller
 
             // Réservations validées (confirmées + payées)
             $reservationsValidees = Reservation::whereIn('voyage_id', $voyageIds)
-                ->whereIn('res_statut', self::STATUTS_VALIDES);
+                ->whereIn('res_statut', self::STATUTS_ENCAISSES);
 
             $revenuTotal = (float) (clone $reservationsValidees)->sum('montant_total');
             $totalReservations = (clone $reservationsValidees)->count();
@@ -359,7 +362,7 @@ class ReservationAdminController extends Controller
             // Réservations récentes (10 dernières)
             $reservationsRecentes = Reservation::with(['utilisateur', 'voyage.trajet.provinceDepart', 'voyage.trajet.provinceArrivee'])
                 ->whereIn('voyage_id', $voyageIds)
-                ->whereIn('res_statut', self::STATUTS_VALIDES)
+                ->whereIn('res_statut', self::STATUTS_ENCAISSES)
                 ->orderBy('created_at', 'desc')
                 ->limit(10)
                 ->get()
@@ -413,7 +416,7 @@ class ReservationAdminController extends Controller
                 ->pluck('voyage_id');
 
             $reservationsBase = Reservation::whereIn('voyage_id', $voyageIds)
-                ->whereIn('res_statut', self::STATUTS_VALIDES);
+                ->whereIn('res_statut', self::STATUTS_ENCAISSES);
 
             // CA par période
             $aujourdhui = (float)(clone $reservationsBase)->whereDate('created_at', today())->sum('montant_total');
@@ -510,7 +513,7 @@ class ReservationAdminController extends Controller
             // Réservations récentes (5 dernières)
             $reservationsRecentes = Reservation::with(['utilisateur', 'voyage.trajet.provinceDepart', 'voyage.trajet.provinceArrivee'])
                 ->whereIn('voyage_id', $voyageIds)
-                ->whereIn('res_statut', self::STATUTS_VALIDES)
+                ->whereIn('res_statut', self::STATUTS_ENCAISSES)
                 ->orderBy('created_at', 'desc')
                 ->limit(5)
                 ->get()
@@ -572,7 +575,7 @@ class ReservationAdminController extends Controller
 
             $query = Reservation::with(['utilisateur', 'voyage.trajet.provinceDepart', 'voyage.trajet.provinceArrivee'])
                 ->whereIn('voyage_id', $voyageIds)
-                ->whereIn('res_statut', self::STATUTS_VALIDES);
+                ->whereIn('res_statut', self::STATUTS_ENCAISSES);
 
             // Filtre par dates
             if ($request->filled('date_debut')) {
@@ -828,7 +831,7 @@ class ReservationAdminController extends Controller
                 ->pluck('voyage_id');
 
             $reservationsBase = Reservation::whereIn('voyage_id', $voyageIds)
-                ->whereIn('res_statut', self::STATUTS_VALIDES);
+                ->whereIn('res_statut', self::STATUTS_ENCAISSES);
 
             // ── Solde global ──
             $revenuBrut = (float)(clone $reservationsBase)->sum('montant_total');
@@ -897,7 +900,7 @@ class ReservationAdminController extends Controller
             // ── Historique des transactions (paginé) ──
             $query = Reservation::with(['utilisateur', 'voyage.trajet.provinceDepart', 'voyage.trajet.provinceArrivee'])
                 ->whereIn('voyage_id', $voyageIds)
-                ->whereIn('res_statut', self::STATUTS_VALIDES);
+                ->whereIn('res_statut', self::STATUTS_ENCAISSES);
 
             // Filtres optionnels
             if ($request->filled('date_debut')) {

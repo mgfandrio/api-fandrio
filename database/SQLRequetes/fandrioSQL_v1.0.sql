@@ -286,7 +286,7 @@ CREATE TABLE fandrio_app.reservations (
     util_id INTEGER NOT NULL REFERENCES fandrio_app.utilisateurs(util_id) ON DELETE CASCADE,
     voyage_id INTEGER NOT NULL REFERENCES fandrio_app.voyages(voyage_id) ON DELETE CASCADE,
     res_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    res_statut INTEGER DEFAULT 1 CHECK (res_statut IN (1, 2, 4, 5)), -- 1: en attente, 2: confirmée (payée), 4: annulée, 5: abandonnée
+    res_statut INTEGER DEFAULT 1 CHECK (res_statut IN (1, 2, 4, 5, 6)), -- 1: en attente, 2: confirmée (payée), 4: annulée (remboursable), 5: abandonnée, 6: annulée par le client (non remboursée, commission due)
     nb_voyageurs INTEGER NOT NULL CHECK (nb_voyageurs > 0),
     montant_total DECIMAL(10,2) NOT NULL CHECK (montant_total > 0),
     montant_avance DECIMAL(10,2) DEFAULT 0 CHECK (montant_avance >= 0),

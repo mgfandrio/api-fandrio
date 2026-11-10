@@ -111,7 +111,7 @@ class GestionStatutVoyagesCommand extends Command
         // 3bis. Gel de la commission : chaque billet payé d'un voyage Terminé, pas encore figé.
         // Étape idempotente et auto-réparatrice (whereNull) : couvre les voyages qui
         // viennent de passer Terminé ET ceux déjà terminés sans commission figée.
-        $billetsAFiger = Reservation::where('res_statut', 2) // confirmée (payée)
+        $billetsAFiger = Reservation::whereIn('res_statut', [2, 6]) // confirmée, ou annulée par le client sans remboursement
             ->whereNull('res_commission')
             ->whereHas('voyage', fn($q) => $q->where('voyage_statut', 3)) // voyage terminé
             ->get();

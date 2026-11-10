@@ -236,6 +236,29 @@ class NotificationService
     }
 
     /**
+     * Prévenir la compagnie qu'un client a annulé son billet (sans remboursement).
+     */
+    public static function notifierAdminAnnulationClient(int $compId, int $resId, string $clientNom, int $nbPlaces, string $voyageInfo): void
+    {
+        $admins = Utilisateur::where('comp_id', $compId)
+            ->where('util_role', 2)
+            ->where('util_statut', 1)
+            ->get();
+
+        $places = $nbPlaces > 1 ? "{$nbPlaces} places libérées" : '1 place libérée';
+        foreach ($admins as $admin) {
+            self::envoyer([
+                'type' => 3, // annulation
+                'destinataire_type' => 2,
+                'destinataire_id' => $admin->util_id,
+                'titre' => 'Billet annulé par le client',
+                'message' => "{$clientNom} a annulé son billet pour {$voyageInfo} : {$places}, de nouveau en vente. Pas de remboursement à effectuer.",
+                'res_id' => $resId,
+            ]);
+        }
+    }
+
+    /**
      * Notifier un client que sa demande de remboursement a été refusée.
      */
     public static function notifierClientRemboursementRefuse(int $utilId, int $resId, string $voyageInfo, string $motif): void

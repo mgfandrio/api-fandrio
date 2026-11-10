@@ -47,9 +47,9 @@ class ReservationController extends Controller
             //  - reservations_confirmees : réservations confirmées (res_statut=2), en attente d'embarquement
             //  - reservations_annulees   : réservations annulées par l'utilisateur ou la compagnie
             $stats = [
-                'total_reservations'      => $reservations->whereIn('res_statut', [2, 4])->count(),
+                'total_reservations'      => $reservations->whereIn('res_statut', [2, 4, 6])->count(),
                 'reservations_confirmees' => $reservations->where('res_statut', 2)->count(),
-                'reservations_annulees'   => $reservations->where('res_statut', 4)->count(),
+                'reservations_annulees'   => $reservations->whereIn('res_statut', [4, 6])->count(),
                 // Alias rétrocompatibilité (à retirer une fois le frontend migré)
                 'voyages_en_cours'        => $reservations->where('res_statut', 2)->count(),
                 'voyages_annules'         => $reservations->where('res_statut', 4)->count(),
@@ -497,6 +497,82 @@ class ReservationController extends Controller
             return response()->json([
                 'statut' => false,
                 'message' => 'Erreur lors de l’annulation: ' . $this->messageErreur($e)
+            ], 400);
+        }
+    }
+
+    /**
+     * Le client annule lui-même un billet PAYÉ, au plus tard 24 h avant le départ.
+     * Pas de remboursement : la compagnie garde le paiement et la commission FANDRIO
+     * reste due (statut 6, compté comme encaissé). Les sièges sont libérés et
+     * peuvent être revendus.
+     * POST /api/client/reservation/{id}/annuler-billet
+     */
+    public function annulerBillet(int $id): JsonResponse
+    {
+        try {
+            $reservation = Reservation::with('voyage.trajet.provinceDepart', 'voyage.trajet.provinceArrivee', 'utilisateur')
+                ->where('util_id', Auth::id())
+                ->findOrFail($id);
+
+            if ((int) $reservation->res_statut !== 2) {
+                return response()->json(['statut' => false, 'message' => 'Seul un billet payé peut être annulé.'], 400);
+            }
+
+            $voyage = $reservation->voyage;
+            if (!$voyage || (int) $voyage->voyage_statut !== 1 || !$voyage->peutEtreAnnule()) {
+                return response()->json([
+                    'statut' => false,
+                    'message' => "Ce billet ne peut plus être annulé : l'annulation est possible jusqu'à 24 h avant le départ.",
+                ], 400);
+            }
+
+            DB::transaction(function () use ($reservation) {
+                // Re-vérifier sous verrou (double appui, embarquement en parallèle...)
+                $verrouillee = Reservation::where('res_id', $reservation->res_id)->lockForUpdate()->first();
+                if (!$verrouillee || (int) $verrouillee->res_statut !== 2) {
+                    throw new \Exception('Ce billet a déjà été annulé.');
+                }
+
+                // Le trigger update_places_voyage libère places_reservees (6 n'est pas un statut actif)
+                $verrouillee->update(['res_statut' => 6]);
+
+                foreach (SiegeReserve::where('res_id', $reservation->res_id)->get() as $siege) {
+                    $numero = $siege->siege_numero;
+                    $siege->update(['siege_statut' => 2, 'utilisateur_id' => null, 'res_id' => null, 'expire_lock' => null]);
+                    broadcast(new SiegeUpdated(
+                        $reservation->voyage_id,
+                        $numero,
+                        'libere',
+                        null,
+                        ['siege' => $numero, 'statut' => 2, 'disponible' => true, 'utilisateur_id' => null, 'expire_lock' => null]
+                    ))->toOthers();
+                }
+            });
+
+            try {
+                $client = $reservation->utilisateur;
+                $depart = $voyage->trajet->provinceDepart->pro_nom ?? 'N/A';
+                $arrivee = $voyage->trajet->provinceArrivee->pro_nom ?? 'N/A';
+                NotificationService::notifierAdminAnnulationClient(
+                    $voyage->trajet->comp_id,
+                    $reservation->res_id,
+                    trim(($client->util_prenom ?? '') . ' ' . ($client->util_nom ?? '')),
+                    (int) $reservation->nb_voyageurs,
+                    "{$depart} → {$arrivee} ({$voyage->voyage_date->format('d/m/Y')})"
+                );
+            } catch (\Exception $notifError) {
+                Log::warning('Notification annulation client failed: ' . $notifError->getMessage());
+            }
+
+            return response()->json([
+                'statut' => true,
+                'message' => "Billet annulé. Les sièges sont libérés ; le paiement n'est pas remboursé.",
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'statut' => false,
+                'message' => 'Annulation impossible : ' . $this->messageErreur($e),
             ], 400);
         }
     }

@@ -37,12 +37,73 @@ class PlanSiege extends Model
 
 
     /**
+     * Cases d'une grille dessinée par la compagnie (config_sieges.grille) :
+     *   'C' = chauffeur, 'S' = siège, '-' = vide ou couloir.
+     * Les sièges sont numérotés 1..N de l'avant vers l'arrière, de gauche à droite.
+     */
+    public const CASE_CHAUFFEUR = 'C';
+    public const CASE_SIEGE = 'S';
+    public const CASE_VIDE = '-';
+
+    /** Grille dessinée, ou null pour un plan automatique (ancien format). */
+    public function getGrille(): ?array
+    {
+        $grille = $this->config_sieges['grille'] ?? null;
+        return is_array($grille) && !empty($grille) ? $grille : null;
+    }
+
+    /**
+     * Grille telle qu'affichée par l'application : 'C' (chauffeur), '' (vide)
+     * ou le numéro du siège. Null si le plan n'a pas de grille.
+     */
+    public function getGrilleAvecNumeros(): ?array
+    {
+        $grille = $this->getGrille();
+        if ($grille === null) {
+            return null;
+        }
+        $numero = 0;
+        $resultat = [];
+        foreach ($grille as $rangee) {
+            $ligne = [];
+            foreach ($rangee as $case) {
+                $ligne[] = $case === self::CASE_SIEGE
+                    ? (string) ++$numero
+                    : ($case === self::CASE_CHAUFFEUR ? 'C' : '');
+            }
+            $resultat[] = $ligne;
+        }
+        return $resultat;
+    }
+
+    /**
      * Parse la configuration des sièges
      */
     public function getSiegesParses(): array 
     {
         $config = $this->config_sieges ?? [];
         $sieges = [];
+
+        // Grille dessinée par la compagnie
+        if ($grille = $this->getGrille()) {
+            $numero = 0;
+            foreach ($grille as $r => $rangee) {
+                foreach ($rangee as $case) {
+                    if ($case !== self::CASE_SIEGE) {
+                        continue;
+                    }
+                    $numero++;
+                    $sieges[] = [
+                        'code' => (string) $numero,
+                        'rangee' => $r + 1,
+                        'numero' => $numero,
+                        'type' => 'standard',
+                        'statut' => 'libre'
+                    ];
+                }
+            }
+            return $sieges;
+        }
 
         // Nouveau format simplifié : {"sieges": [1, 2, 3, ...]}
         if (isset($config['sieges']) && is_array($config['sieges'])) {
@@ -87,6 +148,9 @@ class PlanSiege extends Model
      */
     public function getNombreTotalSieges(): int
     {
+        if ($this->getGrille()) {
+            return count($this->getSiegesParses());
+        }
         $config = $this->config_sieges ?? [];
         
         if (isset($config['sieges']) && is_array($config['sieges'])) {

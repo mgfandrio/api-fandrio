@@ -263,6 +263,8 @@ class SiegeService
                 'chauffeur' => $planSiege->voiture->chauffeur ? ($planSiege->voiture->chauffeur->chauff_nom . ' ' . $planSiege->voiture->chauffeur->chauff_prenom) : 'N/A'
             ],
             'plan' => $siegesConfig,
+            // Disposition dessinée par la compagnie (null : disposition standard côté app)
+            'grille' => $planSiege->getGrilleAvecNumeros(),
             'total_sieges' => count($siegesConfig),
             'sieges_disponibles' => count(array_filter($siegesConfig, fn($s) => $s['statut'] === 'disponible')),
             'sieges_reserves' => count($siegesReserves),

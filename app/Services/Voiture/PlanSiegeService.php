@@ -112,6 +112,110 @@ class PlanSiegeService
     }
 
     /**
+     * Enregistre le plan dessiné par la compagnie (éditeur de plan).
+     *
+     * $grille : rangées de cases 'C' (chauffeur), 'S' (siège), '-' (vide/couloir).
+     * Met à jour le nombre de places du véhicule et la capacité de ses voyages
+     * à venir. Refusé si un siège déjà vendu ou en cours de paiement sur un
+     * voyage programmé / en cours n'existe plus dans le nouveau plan.
+     */
+    public function enregistrerGrille(int $voitureId, array $grille): array
+    {
+        $voiture = $this->verifierVoitureAppartientCompagnie($voitureId);
+
+        // ── Validation de la forme ──
+        $nbRangees = count($grille);
+        if ($nbRangees < 1 || $nbRangees > 25) {
+            throw new \InvalidArgumentException('Le plan doit avoir entre 1 et 25 rangées.');
+        }
+        $largeur = count($grille[0] ?? []);
+        if ($largeur < 2 || $largeur > 6) {
+            throw new \InvalidArgumentException('Une rangée doit avoir entre 2 et 6 cases.');
+        }
+        $chauffeurs = 0;
+        $places = 0;
+        foreach ($grille as $rangee) {
+            if (!is_array($rangee) || count($rangee) !== $largeur) {
+                throw new \InvalidArgumentException('Toutes les rangées doivent avoir la même largeur.');
+            }
+            foreach ($rangee as $case) {
+                if (!in_array($case, [PlanSiege::CASE_CHAUFFEUR, PlanSiege::CASE_SIEGE, PlanSiege::CASE_VIDE], true)) {
+                    throw new \InvalidArgumentException('Case de plan invalide.');
+                }
+                $chauffeurs += $case === PlanSiege::CASE_CHAUFFEUR ? 1 : 0;
+                $places += $case === PlanSiege::CASE_SIEGE ? 1 : 0;
+            }
+        }
+        if ($chauffeurs > 1) {
+            throw new \InvalidArgumentException('Le plan ne peut avoir qu\'un seul chauffeur.');
+        }
+        if ($places < 1 || $places > 80) {
+            throw new \InvalidArgumentException('Le plan doit avoir entre 1 et 80 places.');
+        }
+
+        // Rangées vides en fin de plan : inutiles
+        while (count($grille) > 1 && !in_array(PlanSiege::CASE_SIEGE, end($grille), true) && !in_array(PlanSiege::CASE_CHAUFFEUR, end($grille), true)) {
+            array_pop($grille);
+        }
+
+        return DB::transaction(function () use ($voiture, $grille, $places) {
+            // Voyages actifs de ce véhicule (programmés ou en cours)
+            $voyages = DB::table('fandrio_app.voyages')
+                ->where('voit_id', $voiture->voit_id)
+                ->whereIn('voyage_statut', [1, 2])
+                ->lockForUpdate()
+                ->get(['voyage_id', 'voyage_date', 'places_reservees']);
+            $voyageIds = $voyages->pluck('voyage_id');
+
+            if ($voyageIds->isNotEmpty()) {
+                // Plus grand numéro de siège vendu ou en cours de paiement
+                $plusGrand = (int) DB::table('fandrio_app.reservation_voyageurs as rv')
+                    ->join('fandrio_app.reservations as r', 'r.res_id', '=', 'rv.res_id')
+                    ->whereIn('r.voyage_id', $voyageIds)
+                    ->whereIn('r.res_statut', [1, 2])
+                    ->max('rv.place_numero');
+                if ($plusGrand > $places) {
+                    throw new \InvalidArgumentException(
+                        "Le siège {$plusGrand} est déjà vendu sur un voyage à venir de ce véhicule : le plan doit garder au moins {$plusGrand} places."
+                    );
+                }
+            }
+
+            $plan = PlanSiege::where('voit_id', $voiture->voit_id)->first();
+            $config = [
+                'version' => 2,
+                'grille' => array_values(array_map('array_values', $grille)),
+            ];
+            if ($plan) {
+                $plan->update(['config_sieges' => $config, 'plan_nom' => 'Plan personnalisé', 'plan_statut' => 1]);
+            } else {
+                $plan = PlanSiege::create([
+                    'voit_id' => $voiture->voit_id,
+                    'config_sieges' => $config,
+                    'plan_nom' => 'Plan personnalisé',
+                    'plan_statut' => 1,
+                ]);
+            }
+
+            // Capacité du véhicule et de ses voyages actifs
+            $voiture->update(['voit_places' => $places]);
+            if ($voyageIds->isNotEmpty()) {
+                DB::table('fandrio_app.voyages')
+                    ->whereIn('voyage_id', $voyageIds)
+                    ->where('places_reservees', '<=', $places)
+                    ->update(['places_disponibles' => $places]);
+                foreach ($voyageIds as $id) {
+                    Cache::forget('sieges_voyage_' . $id); // cache du plan d'un voyage (SiegeService)
+                }
+            }
+
+            $this->invaliderCacheVoiture($voiture->voit_id);
+
+            return $this->formaterPlan($plan->fresh('voiture'));
+        });
+    }
+
+    /**
      * Met à jour un plan de sièges existant
      */
     public function mettreAJourPlan(int $planId, PlanSiegeDTO $planSiegeDTO): array
@@ -305,6 +409,7 @@ class PlanSiegeService
                 'modele' => $plan->voiture->voit_modele ?? 'Inconnu'
             ],
             'config_sieges' => $plan->config_sieges,
+            'grille' => $plan->getGrilleAvecNumeros(),
             'nombre_total_sieges' => $plan->getNombreTotalSieges(),
             'statut' => $plan->plan_statut,
             'date_creation' => DateFormatter::formatDateTime($plan->created_at),

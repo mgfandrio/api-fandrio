@@ -282,6 +282,7 @@ Route::middleware(['api.key', 'auth:api', 'role:2'])->prefix('adminCompagnie')->
         Route::delete('/{id}', [PlanSiegeController::class, 'destroy']);
         Route::get('/{id}/statistiques', [PlanSiegeController::class, 'statistiques']);
         Route::get('/voiture/{voitureId}', [PlanSiegeController::class, 'obtenirParVoiture']);
+        Route::put('/voiture/{voitureId}/grille', [PlanSiegeController::class, 'enregistrerGrille']);
     });
 
     // Route pour la gestion des paiements de la compagnie

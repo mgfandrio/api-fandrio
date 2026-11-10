@@ -133,6 +133,33 @@ class PlanSiegeController extends Controller
     }
 
     /**
+     * Enregistre le plan dessiné dans l'éditeur.
+     * PUT /api/adminCompagnie/plans-sieges/voiture/{voitureId}/grille
+     * Corps : { grille: [["C","-","S","S"], ["S","S","-","S"], ...] }
+     */
+    public function enregistrerGrille(Request $request, int $voitureId): JsonResponse
+    {
+        $request->validate([
+            'grille' => 'required|array|min:1|max:25',
+            'grille.*' => 'required|array|min:2|max:6',
+            'grille.*.*' => 'required|string|in:C,S,-',
+        ]);
+
+        try {
+            $plan = $this->planSiegeService->enregistrerGrille($voitureId, $request->input('grille'));
+            return response()->json([
+                'statut' => true,
+                'message' => 'Plan enregistré : ' . $plan['nombre_total_sieges'] . ' places.',
+                'data' => $plan,
+            ]);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json(['statut' => false, 'message' => $e->getMessage()], 422);
+        } catch (\Exception $e) {
+            return response()->json(['statut' => false, 'message' => $this->messageErreur($e)], 400);
+        }
+    }
+
+    /**
      * Récupère le plan d'une voiture
      */
     public function obtenirParVoiture(int $voitureId): JsonResponse

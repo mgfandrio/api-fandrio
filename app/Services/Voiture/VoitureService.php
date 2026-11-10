@@ -53,7 +53,9 @@ class VoitureService
         $placesChangees = isset($donneesUpdate['voit_places']) && $donneesUpdate['voit_places'] != $anciennesPlaces;
         $categorieChangee = isset($donneesUpdate['voit_categorie']) && $donneesUpdate['voit_categorie'] !== $ancienneCategorie;
 
-        if ($placesChangees || $categorieChangee) {
+        // Un plan dessiné par la compagnie est gardé si seule la catégorie change
+        $planDessine = (bool) $voiture->planSiege?->getGrille();
+        if ($placesChangees || ($categorieChangee && !$planDessine)) {
             $this->planSiegeService->genererPlanAutomatique(
                 $voiture->voit_id,
                 $voiture->voit_places,

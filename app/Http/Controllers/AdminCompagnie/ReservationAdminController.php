@@ -676,6 +676,9 @@ class ReservationAdminController extends Controller
     /**
      * Scanner QR - Validation d'un billet
      * POST /api/adminCompagnie/reservations/scanner-qr
+     *
+     * Corps : qr_data (contenu du QR) OU numero (numéro du billet saisi à la main,
+     * quand le QR est illisible ou le téléphone du client hors d'usage).
      */
     public function scannerQR(Request $request): JsonResponse
     {
@@ -683,40 +686,60 @@ class ReservationAdminController extends Controller
             $compagnieId = $this->getCompagnieId();
 
             $request->validate([
-                'qr_data' => 'required|string'
+                'qr_data' => 'required_without:numero|nullable|string',
+                'numero' => 'required_without:qr_data|nullable|string|max:30',
             ]);
 
-            // Le QR affiché par l'application contient le JSON en clair ; on accepte
-            // aussi l'ancien format encodé en base64.
-            $brut = trim((string) $request->qr_data);
-            $qrInfo = json_decode($brut, true);
-            if (!is_array($qrInfo)) {
-                $decoded = base64_decode($brut, true);
-                $qrInfo = $decoded ? json_decode($decoded, true) : null;
-            }
-            if (!is_array($qrInfo)) {
-                return response()->json(['statut' => false, 'message' => 'QR Code invalide.', 'validation' => 'invalide'], 400);
-            }
-
-            if (!$qrInfo || ($qrInfo['app'] ?? '') !== 'FANDRIO') {
-                return response()->json(['statut' => false, 'message' => 'Ce QR Code n\'est pas un billet FANDRIO.', 'validation' => 'invalide'], 400);
-            }
-
-            $resId = $qrInfo['res_id'] ?? null;
-            if (!$resId) {
-                return response()->json(['statut' => false, 'message' => 'QR Code incomplet.', 'validation' => 'invalide'], 400);
-            }
-
-            $reservation = Reservation::with([
+            $avecRelations = fn($q) => $q->with([
                 'utilisateur',
                 'voyage.trajet.provinceDepart',
                 'voyage.trajet.provinceArrivee',
                 'voyage.trajet',
                 'voyageurs'
-            ])->find($resId);
+            ]);
 
-            if (!$reservation) {
-                return response()->json(['statut' => false, 'message' => 'Réservation introuvable.', 'validation' => 'invalide'], 400);
+            if ($request->filled('numero')) {
+                // Saisie manuelle : numéro exact, sans tenir compte des espaces ni de la casse
+                $numero = strtoupper(preg_replace('/\s+/', '', (string) $request->numero));
+                $reservation = $avecRelations(Reservation::query())->whereRaw('UPPER(res_numero) = ?', [$numero])->first();
+                if (!$reservation) {
+                    return response()->json(['statut' => false, 'message' => "Aucun billet ne porte le numéro {$numero}.", 'validation' => 'invalide'], 400);
+                }
+            } else {
+                // Le QR affiché par l'application contient le JSON en clair ; on accepte
+                // aussi l'ancien format encodé en base64.
+                $brut = trim((string) $request->qr_data);
+                $qrInfo = json_decode($brut, true);
+                if (!is_array($qrInfo)) {
+                    $decoded = base64_decode($brut, true);
+                    $qrInfo = $decoded ? json_decode($decoded, true) : null;
+                }
+                if (!is_array($qrInfo)) {
+                    return response()->json(['statut' => false, 'message' => 'QR Code invalide.', 'validation' => 'invalide'], 400);
+                }
+
+                if (($qrInfo['app'] ?? '') !== 'FANDRIO') {
+                    return response()->json(['statut' => false, 'message' => 'Ce QR Code n\'est pas un billet FANDRIO.', 'validation' => 'invalide'], 400);
+                }
+
+                $resId = $qrInfo['res_id'] ?? null;
+                if (!$resId) {
+                    return response()->json(['statut' => false, 'message' => 'QR Code incomplet.', 'validation' => 'invalide'], 400);
+                }
+
+                $reservation = $avecRelations(Reservation::query())->find($resId);
+                if (!$reservation) {
+                    return response()->json(['statut' => false, 'message' => 'Réservation introuvable.', 'validation' => 'invalide'], 400);
+                }
+
+                // Authenticité : QR signé (billets récents) ; à défaut (anciens billets),
+                // le numéro inscrit dans le QR doit correspondre à la réservation.
+                $authentique = isset($qrInfo['sig'])
+                    ? hash_equals($reservation->signatureQr(), (string) $qrInfo['sig'])
+                    : (string) ($qrInfo['res_numero'] ?? '') === (string) $reservation->res_numero;
+                if (!$authentique) {
+                    return response()->json(['statut' => false, 'message' => 'QR Code falsifié : ce billet n\'est pas authentique.', 'validation' => 'invalide'], 400);
+                }
             }
 
             // Vérifier que la réservation appartient à cette compagnie
@@ -1009,6 +1032,7 @@ class ReservationAdminController extends Controller
                 'app' => 'FANDRIO',
                 'res_numero' => $reservation->res_numero,
                 'res_id' => $reservation->res_id,
+                'sig' => $reservation->signatureQr(), // authenticité du billet
                 'client' => ['nom' => $resultat['voyageurs'][0]['nom'] ?? '', 'telephone' => ''],
                 'voyage_id' => $voyageId,
                 'trajet' => $resultat['trajet'],

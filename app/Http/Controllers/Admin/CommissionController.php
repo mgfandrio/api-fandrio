@@ -27,7 +27,8 @@ class CommissionController extends Controller
      *   - commission, brut, billets       : réservations EN LIGNE confirmées (res_statut 2, et 6 : annulées par le client sans remboursement) du mois ; le guichet (res_canal 2) est exclu
      *   - clients_nouveaux                : comptes clients créés dans le mois
      *   - clients_actifs                  : clients distincts ayant payé au moins un billet dans le mois
-     *   - clients_perdus                  : clients actifs le mois précédent sans achat ce mois-ci
+     *   - clients_perdus                  : clients sans achat depuis 3 mois, comptés le mois où ils
+     *                                       atteignent ces 3 mois (dernier achat en M-3, rien en M-2, M-1, M)
      *   - compagnies_nouvelles            : compagnies créées dans le mois
      *   - compagnies_actives              : compagnies distinctes ayant vendu au moins un billet dans le mois
      *
@@ -38,9 +39,10 @@ class CommissionController extends Controller
         try {
             $nbMois = max(3, min(24, (int) $request->query('mois', 12)));
 
-            $donnees = Cache::remember("admin:evolution:{$nbMois}", 600, function () use ($nbMois) {
-                // Un mois de plus en amont pour calculer les clients perdus du premier mois affiché
+            $donnees = Cache::remember("admin:evolution:v2:{$nbMois}", 600, function () use ($nbMois) {
                 $debut = now()->startOfMonth()->subMonths($nbMois);
+                // 3 mois de plus en amont pour les clients perdus des premiers mois affichés
+                $debutAchats = $debut->copy()->subMonths(3);
                 $res = (new Reservation)->getTable();
                 $voy = (new Voyage)->getTable();
                 $traj = (new \App\Models\Trajet\Trajet)->getTable();
@@ -55,7 +57,7 @@ class CommissionController extends Controller
 
                 // Paires (client, mois) d'achat : sert aux actifs et aux perdus
                 $achats = DB::table($res)
-                    ->whereIn('res_statut', [2, 6])->where('res_canal', 1)->where('created_at', '>=', $debut)
+                    ->whereIn('res_statut', [2, 6])->where('res_canal', 1)->where('created_at', '>=', $debutAchats)
                     ->selectRaw(sprintf($mois, 'created_at') . ' as mois, util_id')
                     ->distinct()->get()
                     ->groupBy('mois')->map(fn($l) => $l->pluck('util_id')->all());
@@ -81,9 +83,14 @@ class CommissionController extends Controller
                 for ($i = $nbMois - 1; $i >= 0; $i--) {
                     $m = now()->startOfMonth()->subMonths($i);
                     $cle = $m->format('Y-m');
-                    $precedent = $m->copy()->subMonth()->format('Y-m');
                     $actifs = $achats->get($cle, []);
-                    $actifsAvant = $achats->get($precedent, []);
+                    // Perdus : achat en M-3, puis plus rien en M-2, M-1 et M
+                    $actifsM3 = $achats->get($m->copy()->subMonths(3)->format('Y-m'), []);
+                    $depuis = array_merge(
+                        $achats->get($m->copy()->subMonths(2)->format('Y-m'), []),
+                        $achats->get($m->copy()->subMonth()->format('Y-m'), []),
+                        $actifs
+                    );
                     $brut = (float) ($ventes[$cle]->brut ?? 0);
                     $resultat[] = [
                         'mois'                 => $cle,
@@ -92,7 +99,7 @@ class CommissionController extends Controller
                         'billets'              => (int) ($ventes[$cle]->billets ?? 0),
                         'clients_nouveaux'     => (int) ($nouveauxClients[$cle] ?? 0),
                         'clients_actifs'       => count($actifs),
-                        'clients_perdus'       => count(array_diff($actifsAvant, $actifs)),
+                        'clients_perdus'       => count(array_diff($actifsM3, $depuis)),
                         'compagnies_nouvelles' => (int) ($nouvellesCompagnies[$cle] ?? 0),
                         'compagnies_actives'   => (int) ($compagniesActives[$cle] ?? 0),
                     ];
@@ -608,6 +615,68 @@ class CommissionController extends Controller
                 'statut'  => true,
                 'message' => 'Collecte confirmée avec succès. Notification envoyée à la compagnie.',
                 'data'    => $this->formaterCollecte($collecte->fresh()->load('compagnie')),
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['statut' => false, 'message' => 'Erreur: ' . $this->messageErreur($e)], 500);
+        }
+    }
+
+    /**
+     * Relancer la compagnie pour une collecte non payée (en attente ou en retard).
+     * POST /admin/commissions/collectes/{collecteId}/relancer
+     * Une relance au plus toutes les 12 heures par collecte.
+     */
+    public function relancerCollecte(int $collecteId): JsonResponse
+    {
+        try {
+            $collecte = Collecte::with('compagnie')->findOrFail($collecteId);
+
+            if ($collecte->coll_statut !== Collecte::EN_ATTENTE) {
+                return response()->json(['statut' => false, 'message' => 'Cette collecte est déjà payée.'], 422);
+            }
+
+            $cle = "relance_collecte_{$collecteId}";
+            if (\Illuminate\Support\Facades\Cache::has($cle)) {
+                return response()->json(['statut' => false, 'message' => 'La compagnie a déjà été relancée il y a moins de 12 heures.'], 429);
+            }
+
+            $admins = Utilisateur::where('comp_id', $collecte->comp_id)
+                ->where('util_role', 2)
+                ->where('util_statut', 1)
+                ->get();
+            if ($admins->isEmpty()) {
+                return response()->json(['statut' => false, 'message' => 'Aucun administrateur actif à prévenir pour cette compagnie.'], 422);
+            }
+
+            $periodeDebut = $collecte->coll_periode_debut->format('d/m/Y');
+            $periodeFin   = $collecte->coll_periode_fin->format('d/m/Y');
+            $montant      = number_format((float) $collecte->coll_montant_commission, 0, ',', ' ') . ' Ar';
+            $enRetard     = $collecte->coll_date_prevue && $collecte->coll_date_prevue->lt(today());
+            $echeance     = $collecte->coll_date_prevue ? $collecte->coll_date_prevue->format('d/m/Y') : null;
+
+            $titre   = $enRetard ? 'Rappel : commission en retard' : 'Rappel : commission à régler';
+            $message = "La commission FANDRIO du {$periodeDebut} au {$periodeFin} ({$montant}) "
+                . ($enRetard ? "devait être réglée le {$echeance}. " : ($echeance ? "est à régler avant le {$echeance}. " : 'est à régler. '))
+                . 'Réglez-la depuis Portefeuille > Payer la commission'
+                . ($enRetard ? ' pour que vos voyages restent visibles des clients.' : '.');
+
+            foreach ($admins as $admin) {
+                NotificationService::envoyer([
+                    'type'              => 8, // commission
+                    'destinataire_type' => 2, // compagnie
+                    'destinataire_id'   => $admin->util_id,
+                    'titre'             => $titre,
+                    'message'           => $message,
+                ]);
+            }
+
+            \Illuminate\Support\Facades\Cache::put($cle, now()->toIso8601String(), now()->addHours(12));
+
+            return response()->json([
+                'statut'  => true,
+                'message' => $admins->count() > 1
+                    ? "Relance envoyée aux {$admins->count()} administrateurs de la compagnie."
+                    : 'Relance envoyée à la compagnie.',
             ]);
         } catch (\Exception $e) {
             return response()->json(['statut' => false, 'message' => 'Erreur: ' . $this->messageErreur($e)], 500);

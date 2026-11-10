@@ -300,6 +300,37 @@ class CompagnieService
     }
 
     /**
+     * Informations publiques modifiables par l'admin compagnie lui-même :
+     * description, contacts, adresse, localisation et provinces desservies.
+     * Le nom, le NIF, le STAT, les modes et la commission restent du ressort
+     * de l'admin système.
+     */
+    public function mettreAJourInfosPubliques(int $compagnieId, array $donnees): array
+    {
+        return DB::transaction(function () use ($compagnieId, $donnees) {
+            $compagnie = Compagnie::findOrFail($compagnieId);
+
+            if (!empty($donnees['comp_email'])) {
+                $emailPris = Compagnie::where('comp_email', $donnees['comp_email'])
+                    ->where('comp_id', '!=', $compagnieId)
+                    ->exists();
+                if ($emailPris) {
+                    throw new \InvalidArgumentException('Cet e-mail est déjà utilisé par une autre compagnie.');
+                }
+            }
+
+            $champs = ['comp_description', 'comp_phone', 'comp_email', 'comp_adresse', 'comp_localisation'];
+            $compagnie->update(array_intersect_key($donnees, array_flip($champs)));
+
+            if (array_key_exists('provinces_desservies', $donnees)) {
+                $this->synchroniserProvinces($compagnieId, array_values(array_unique(array_map('intval', $donnees['provinces_desservies']))));
+            }
+
+            return $this->getCompagnie($compagnieId);
+        });
+    }
+
+    /**
      * Met à jour uniquement les modes de paiement d'une compagnie
      */
     public function updateModesPaiement(int $compagnieId, array $modesPaiement): array

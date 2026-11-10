@@ -607,6 +607,7 @@ class ReservationController extends Controller
                 'app' => 'FANDRIO',
                 'res_numero' => $reservation->res_numero,
                 'res_id' => $reservation->res_id,
+                'sig' => $reservation->signatureQr(), // authenticité du billet
                 'client' => [
                     'nom' => ($reservation->utilisateur->util_prenom ?? '') . ' ' . ($reservation->utilisateur->util_nom ?? ''),
                     'telephone' => $reservation->utilisateur->util_telephone ?? '',

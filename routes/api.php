@@ -209,6 +209,7 @@ Route::middleware(['api.key', 'auth:api', 'role:3'])->prefix('admin')->group(fun
         Route::get('/collectes/dues', [CommissionController::class, 'collectesDues']);
         Route::get('/collectes/{collecteId}', [CommissionController::class, 'detailCollecte']);
         Route::post('/collectes/{collecteId}/confirmer', [CommissionController::class, 'confirmerCollecte']);
+        Route::post('/collectes/{collecteId}/relancer', [CommissionController::class, 'relancerCollecte']);
         Route::get('/collectes/compagnie/{compagnieId}', [CommissionController::class, 'historiqueCollectes']);
     });
 });
@@ -287,6 +288,10 @@ Route::middleware(['api.key', 'auth:api', 'role:2'])->prefix('adminCompagnie')->
 
     // Route pour la gestion des paiements de la compagnie
     Route::put('/update-paiements', [CompagnieController::class, 'updatePaiements']);
+
+    // Informations publiques de sa compagnie (modifiables par l'admin compagnie)
+    Route::get('/ma-compagnie', [CompagnieController::class, 'maCompagnie']);
+    Route::put('/ma-compagnie', [CompagnieController::class, 'mettreAJourMaCompagnie']);
 
     // Route pour la gestion du logo de la compagnie
     Route::post('/logo', [CompagnieController::class, 'uploadLogo']);

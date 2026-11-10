@@ -162,6 +162,55 @@ class CompagnieController extends Controller
     }
 
     /**
+     * Admin compagnie : sa propre compagnie (informations publiques, provinces desservies).
+     * GET /api/adminCompagnie/ma-compagnie
+     */
+    public function maCompagnie(Request $request): JsonResponse
+    {
+        try {
+            return response()->json([
+                'statut' => true,
+                'data' => $this->compagnieService->getCompagnie((int) $request->user()->comp_id),
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['statut' => false, 'message' => $this->messageErreur($e)], 400);
+        }
+    }
+
+    /**
+     * Admin compagnie : met à jour ses informations publiques.
+     * PUT /api/adminCompagnie/ma-compagnie
+     */
+    public function mettreAJourMaCompagnie(Request $request): JsonResponse
+    {
+        $donnees = $request->validate([
+            'comp_description' => 'sometimes|nullable|string|max:2000',
+            'comp_phone' => 'sometimes|nullable|string|max:20',
+            'comp_email' => 'sometimes|nullable|email|max:100',
+            'comp_adresse' => 'sometimes|nullable|string|max:500',
+            'comp_localisation' => 'sometimes|nullable|integer|exists:provinces,pro_id',
+            'provinces_desservies' => 'sometimes|array|min:1',
+            'provinces_desservies.*' => 'integer|exists:provinces,pro_id',
+        ], [
+            'provinces_desservies.min' => 'Choisissez au moins une province desservie.',
+            'comp_email.email' => 'Adresse e-mail invalide.',
+        ]);
+
+        try {
+            $compagnie = $this->compagnieService->mettreAJourInfosPubliques((int) $request->user()->comp_id, $donnees);
+            return response()->json([
+                'statut' => true,
+                'message' => 'Informations enregistrées.',
+                'data' => $compagnie,
+            ]);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json(['statut' => false, 'message' => $e->getMessage()], 422);
+        } catch (\Exception $e) {
+            return response()->json(['statut' => false, 'message' => $this->messageErreur($e)], 400);
+        }
+    }
+
+    /**
      * Met à jour une compagnie
      */
     public function update(Request $request, int $id): JsonResponse

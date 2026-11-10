@@ -44,6 +44,15 @@ class Reservation extends Model
     public const CANAL_GUICHET = 2;
 
     /**
+     * Signature du QR code du billet (HMAC avec la clé de l'application) :
+     * empêche de fabriquer un faux QR avec le numéro d'un autre billet.
+     */
+    public function signatureQr(): string
+    {
+        return substr(hash_hmac('sha256', $this->res_id . '|' . $this->res_numero, (string) config('app.key')), 0, 20);
+    }
+
+    /**
      * Convertir les types de données pour les colonnes.
      */
     protected $casts = [

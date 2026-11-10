@@ -182,6 +182,7 @@ class ReservationPaiementService
                 $clientNom,
                 $voyageInfo
             );
+            NotificationService::notifierClientReservationConfirmee($reservation->util_id, $reservation->res_id, $voyageInfo);
         } catch (\Throwable $e) {
             Log::warning('Notification admin (paiement PAPI) échouée : ' . $e->getMessage());
         }

@@ -422,6 +422,7 @@ class ReservationController extends Controller
                     trim($clientNom),
                     $voyageInfo
                 );
+                NotificationService::notifierClientReservationConfirmee($reservation->util_id, $reservation->res_id, $voyageInfo);
             } catch (\Exception $notifError) {
                 Log::warning('Notification admin failed: ' . $notifError->getMessage());
             }

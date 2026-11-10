@@ -209,6 +209,7 @@ class ReservationAdminController extends Controller
                         'phone' => $voyageur->voya_phone,
                         'phone2' => $voyageur->voya_phone2,
                         'siege' => $voyageur->pivot->place_numero,
+                        'embarque' => ($voyageur->pivot->res_voya_statut ?? 1) >= 2,
                         'client' => $reservation->utilisateur ? [
                             'nom' => $reservation->utilisateur->util_nom,
                             'prenom' => $reservation->utilisateur->util_prenom,
@@ -714,6 +715,7 @@ class ReservationAdminController extends Controller
                     1 => 'en attente de paiement',
                     4 => 'annulée',
                     5 => 'abandonnée',
+                    6 => 'annulé par le client',
                     default => 'dans un état inconnu'
                 };
                 return response()->json([
@@ -784,9 +786,14 @@ class ReservationAdminController extends Controller
      * Marquer les voyageurs comme embarqués
      * POST /api/adminCompagnie/reservations/{resId}/embarquer
      */
-    public function embarquer(int $resId): JsonResponse
+    public function embarquer(Request $request, int $resId): JsonResponse
     {
         try {
+            // voyageurs : identifiants (voya_id) des voyageurs présents ; absent = tout le billet
+            $request->validate([
+                'voyageurs' => 'sometimes|array|min:1',
+                'voyageurs.*' => 'integer',
+            ]);
             $compagnieId = $this->getCompagnieId();
 
             $reservation = Reservation::with(['voyage.trajet'])->findOrFail($resId);
@@ -799,14 +806,22 @@ class ReservationAdminController extends Controller
                 return response()->json(['statut' => false, 'message' => 'Réservation non confirmée.'], 400);
             }
 
-            // Marquer tous les voyageurs comme embarqués (statut 2)
-            DB::table('fandrio_app.reservation_voyageurs')
+            // Marquer comme embarqués (statut 2) les voyageurs présents, ou tout le billet
+            $requete = DB::table('fandrio_app.reservation_voyageurs')->where('res_id', $resId);
+            if ($request->filled('voyageurs')) {
+                $requete->whereIn('voya_id', $request->input('voyageurs'));
+            }
+            $nb = $requete->update(['res_voya_statut' => 2]);
+
+            $restants = DB::table('fandrio_app.reservation_voyageurs')
                 ->where('res_id', $resId)
-                ->update(['res_voya_statut' => 2]);
+                ->where('res_voya_statut', '<', 2)
+                ->count();
 
             return response()->json([
                 'statut' => true,
-                'message' => 'Voyageurs marqués comme embarqués avec succès.'
+                'message' => $nb > 1 ? "{$nb} voyageurs embarqués." : 'Voyageur embarqué.',
+                'data' => ['embarques' => $nb, 'restants' => $restants],
             ]);
         } catch (\Exception $e) {
             return response()->json([

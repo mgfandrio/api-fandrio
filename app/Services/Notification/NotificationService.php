@@ -59,6 +59,24 @@ class NotificationService
         }
     }
 
+    /** Rappel, répété dans les notifications client : le billet fonctionne sans internet. */
+    public const PHRASE_BILLET_HORS_LIGNE = "Le jour du départ, montrez le QR code (FANDRIO > Billets) à l'agent de la compagnie : il fonctionne même sans internet.";
+
+    /**
+     * Confirmer au client que sa réservation est payée et son billet prêt
+     */
+    public static function notifierClientReservationConfirmee(int $utilId, int $resId, string $voyageInfo): void
+    {
+        self::envoyer([
+            'type' => 1, // confirmation
+            'destinataire_type' => 1, // utilisateur
+            'destinataire_id' => $utilId,
+            'titre' => '✅ Réservation confirmée',
+            'message' => "Votre billet pour {$voyageInfo} est confirmé. " . self::PHRASE_BILLET_HORS_LIGNE,
+            'res_id' => $resId,
+        ]);
+    }
+
     /**
      * Envoyer un rappel de voyage au client
      */
@@ -69,7 +87,7 @@ class NotificationService
             : "Rappel : voyage dans {$joursRestants} jour" . ($joursRestants > 1 ? 's' : '');
 
         $message = $joursRestants === 0
-            ? "Votre voyage {$voyageInfo} est prévu aujourd'hui. Bon voyage !"
+            ? "Votre voyage {$voyageInfo} est aujourd'hui. Montrez le QR code (FANDRIO > Billets) à l'agent de la compagnie : il fonctionne même sans internet. Bon voyage !"
             : "Votre voyage {$voyageInfo} est prévu dans {$joursRestants} jour" . ($joursRestants > 1 ? 's' : '') . ". Préparez-vous !";
 
         self::envoyer([

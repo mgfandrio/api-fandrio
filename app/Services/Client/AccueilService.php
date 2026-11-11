@@ -147,48 +147,82 @@ class AccueilService
     /**
      * Fil des voyages de l'accueil, paginé (défilement infini côté app).
      *
-     * Ordre :
-     *  1. avec géolocalisation : voyages au départ de la province du client,
-     *     puis à destination de cette province, puis les autres ;
-     *  2. diversité : le prochain départ de CHAQUE trajet passe avant le
-     *     deuxième départ d'un même trajet (un trajet très programmé ne
-     *     monopolise pas le fil) ;
+     * Une carte du fil = un trajet à une date. Si la compagnie programme
+     * plusieurs départs ce jour-là (matin, soir…), ils sont regroupés dans
+     * `departs` et le client choisit son heure avant de réserver.
+     *
+     * Ordre des cartes :
+     *  1. avec géolocalisation : départ de la province du client, puis arrivée
+     *     vers cette province, puis le reste ;
+     *  2. diversité : la prochaine date de CHAQUE trajet passe avant la date
+     *     suivante d'un même trajet ;
      *  3. ordre aléatoire stable (rotation toutes les 2 h).
      *
-     * Seule la liste ordonnée des identifiants est mise en cache (5 min au plus,
-     * invalidée dès qu'un voyage ou une compagnie change) ; le détail de la page
-     * est lu en direct, avec les places et l'état actuels.
+     * Seule la liste ordonnée des cartes est mise en cache (5 min au plus,
+     * invalidée dès qu'un voyage ou une compagnie change) ; le détail est lu
+     * en direct, avec les places et l'état actuels.
      */
     public function getVoyagesPage(?Province $provinceProche, int $page = 1, int $parPage = 10): array
     {
         $parPage = max(1, min($parPage, 30));
-        $ids = $this->getOrdreVoyages($provinceProche);
-        $total = count($ids);
-        $tranche = array_slice($ids, ($page - 1) * $parPage, $parPage);
+        $groupes = $this->getOrdreVoyages($provinceProche);
+        $total = count($groupes);
+        $tranche = array_slice($groupes, ($page - 1) * $parPage, $parPage);
 
-        $voyages = [];
+        $cartes = [];
         if (!empty($tranche)) {
-            $charges = $this->voyagesVisibles()
+            $paires = array_map(fn($g) => explode('|', $g), $tranche);
+            $voyages = $this->voyagesVisibles()
                 ->with(['trajet.provinceDepart', 'trajet.provinceArrivee', 'trajet.compagnie.modesPaiement', 'voiture'])
-                ->whereIn('voyages.voyage_id', $tranche)
+                ->where(function ($q) use ($paires) {
+                    foreach ($paires as [$trajId, $date]) {
+                        $q->orWhere(fn($q) => $q->where('voyages.traj_id', (int) $trajId)->where('voyages.voyage_date', $date));
+                    }
+                })
+                ->orderBy('voyages.voyage_heure_depart')
                 ->get()
-                ->keyBy('voyage_id');
-            // Garder l'ordre du fil ; un voyage devenu complet / en pause entre-temps est omis
-            foreach ($tranche as $id) {
-                if (isset($charges[$id])) {
-                    $voyages[] = $this->formaterVoyage($charges[$id]);
+                ->groupBy(fn($v) => $v->traj_id . '|' . $v->voyage_date->toDateString());
+
+            // Garder l'ordre du fil ; une carte dont tous les départs sont devenus
+            // complets / en pause entre-temps est omise
+            foreach ($tranche as $cle) {
+                $departs = $voyages[$cle] ?? null;
+                if (!$departs || $departs->isEmpty()) {
+                    continue;
                 }
+                $carte = $this->formaterVoyage($departs->first());
+                $carte['departs'] = $departs->map(fn(Voyage $v) => $this->formaterDepart($v))->values()->all();
+                $cartes[] = $carte;
             }
         }
 
         return [
-            'voyages' => $voyages,
+            'voyages' => $cartes,
             'pagination' => [
                 'page' => $page,
                 'par_page' => $parPage,
                 'total' => $total,
                 'a_suivre' => $page * $parPage < $total,
             ],
+        ];
+    }
+
+    /** Un départ d'une carte du fil (ce qui change d'une heure à l'autre). */
+    private function formaterDepart(Voyage $voyage): array
+    {
+        $voiture = $voyage->voiture;
+        return [
+            'voyage_id'          => $voyage->voyage_id,
+            'heure_depart'       => $voyage->voyage_heure_depart,
+            'type'               => $voyage->voyage_type == 1 ? 'jour' : 'nuit',
+            'places_disponibles' => max(0, $voyage->places_disponibles - $voyage->places_reservees),
+            'est_complet'        => $voyage->estComplet(),
+            'voiture' => $voiture ? [
+                'matricule' => $voiture->voit_matricule,
+                'marque'    => $voiture->voit_marque,
+                'modele'    => $voiture->voit_modele,
+                'capacite'  => $voiture->voit_places,
+            ] : null,
         ];
     }
 
@@ -214,27 +248,36 @@ class AccueilService
             ->select('voyages.*');
     }
 
-    /** Liste ordonnée des identifiants du fil (mise en cache). */
+    /** Liste ordonnée des cartes du fil, « traj_id|date » (mise en cache). */
     private function getOrdreVoyages(?Province $provinceProche): array
     {
         $slot = $this->getRotationSlot();
         $cle = 'accueil_ordre:' . self::version() . ':' . ($provinceProche?->pro_id ?? 'aucune') . ':' . $slot;
 
         return Cache::remember($cle, 300, function () use ($provinceProche, $slot) {
-            $base = $this->voyagesVisibles()
-                ->addSelect('t.pro_depart', 't.pro_arrivee')
-                ->selectRaw('ROW_NUMBER() OVER (PARTITION BY voyages.traj_id ORDER BY voyages.voyage_date, voyages.voyage_heure_depart) AS rang');
+            // Une ligne par trajet et par date
+            $groupes = $this->voyagesVisibles()
+                ->reorder()
+                ->select('voyages.traj_id', 'voyages.voyage_date', 't.pro_depart', 't.pro_arrivee')
+                ->selectRaw('MIN(voyages.voyage_id) AS id_ref')
+                ->groupBy('voyages.traj_id', 'voyages.voyage_date', 't.pro_depart', 't.pro_arrivee');
 
-            $query = DB::query()->fromSub($base, 'x')->select('x.voyage_id');
+            $base = DB::query()->fromSub($groupes, 'g')
+                ->select('g.*')
+                ->selectRaw('ROW_NUMBER() OVER (PARTITION BY g.traj_id ORDER BY g.voyage_date) AS rang');
+
+            $query = DB::query()->fromSub($base, 'x')->select('x.traj_id', 'x.voyage_date');
             if ($provinceProche) {
                 $query->orderByRaw(
                     'CASE WHEN x.pro_depart = ? THEN 0 WHEN x.pro_arrivee = ? THEN 1 ELSE 2 END',
                     [$provinceProche->pro_id, $provinceProche->pro_id]
                 );
             }
-            $query->orderBy('x.rang')->orderByRaw('hashint4extended(x.voyage_id, ?)', [$slot]);
+            $query->orderBy('x.rang')->orderByRaw('hashint4extended(x.id_ref, ?)', [$slot]);
 
-            return $query->limit(500)->pluck('voyage_id')->map(fn($id) => (int) $id)->all();
+            return $query->limit(500)->get()
+                ->map(fn($g) => (int) $g->traj_id . '|' . substr((string) $g->voyage_date, 0, 10))
+                ->all();
         });
     }
 

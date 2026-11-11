@@ -19,7 +19,7 @@ class AccueilController extends Controller
 
     /**
      * Données de la page d'accueil client.
-     * GET /api/accueil?lat=X&lng=Y (lat/lng optionnels)
+     * GET /api/accueil?lat=X&lng=Y&page=N (lat/lng optionnels ; page > 1 : suite du fil des voyages)
      */
     public function index(Request $request): JsonResponse
     {
@@ -39,7 +39,8 @@ class AccueilController extends Controller
                 }
             }
 
-            $data = $this->accueilService->getDonneesAccueil($latitude, $longitude);
+            $page = max(1, (int) $request->query('page', 1));
+            $data = $this->accueilService->getDonneesAccueil($latitude, $longitude, $page);
 
             return response()->json([
                 'statut' => true,

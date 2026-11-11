@@ -21,7 +21,7 @@ class AccueilService
      * Priorise le contenu selon la géolocalisation du client.
      * Rotation toutes les 2h si pas de géolocalisation.
      */
-    public function getDonneesAccueil(?float $latitude = null, ?float $longitude = null): array
+    public function getDonneesAccueil(?float $latitude = null, ?float $longitude = null, int $page = 1): array
     {
         $provinceProche = null;
 
@@ -29,77 +29,25 @@ class AccueilService
             $provinceProche = $this->trouverProvinceProche($latitude, $longitude);
         }
 
-        $slot = $this->getRotationSlot();
-        $cacheKey = $provinceProche
-            ? "accueil_province_{$provinceProche->pro_id}_{$slot}"
-            : "accueil_aleatoire_{$slot}";
+        $fil = $this->getVoyagesPage($provinceProche, max(1, $page));
 
-        $calculer = fn () => [
-            'compagnies' => $this->getCompagnies($provinceProche),
-            'voyages'    => $this->getVoyages($provinceProche),
+        // Pages suivantes : seulement la suite du fil
+        if ($page > 1) {
+            return $fil;
+        }
+
+        $slot = $this->getRotationSlot();
+        $cleCompagnies = 'accueil_compagnies:' . self::version() . ':' . ($provinceProche?->pro_id ?? 'aucune') . ':' . $slot;
+
+        return [
+            'compagnies' => Cache::remember($cleCompagnies, self::CACHE_DURATION, fn () => $this->getCompagnies($provinceProche)),
+            'voyages'    => $fil['voyages'],
+            'pagination' => $fil['pagination'],
             'province_detectee' => $provinceProche ? [
                 'id'  => $provinceProche->pro_id,
                 'nom' => $provinceProche->pro_nom,
             ] : null,
         ];
-
-        $donnees = Cache::get($cacheKey);
-
-        if ($donnees === null) {
-            // Cache expiré : un seul worker recalcule, les autres attendent
-            // son résultat (sinon chaque client arrivant au même moment
-            // relance les requêtes lourdes de l'accueil).
-            try {
-                $donnees = Cache::lock($cacheKey . ':calcul', 10)->block(5, function () use ($cacheKey, $calculer) {
-                    return Cache::remember($cacheKey, self::CACHE_DURATION, $calculer);
-                });
-            } catch (\Illuminate\Contracts\Cache\LockTimeoutException $e) {
-                $donnees = $calculer();
-            }
-        }
-
-        // Rafraîchir les places disponibles en temps réel (hors cache)
-        // pour que la liste des voyages à venir reflète les réservations récentes.
-        $donnees['voyages'] = $this->rafraichirPlacesDisponibles($donnees['voyages'] ?? []);
-
-        return $donnees;
-    }
-
-    /**
-     * Recalcule places_disponibles / est_complet à partir des valeurs actuelles
-     * en base, sans recharger toute la structure mise en cache.
-     */
-    private function rafraichirPlacesDisponibles(array $voyages): array
-    {
-        if (empty($voyages)) {
-            return $voyages;
-        }
-
-        $ids = array_values(array_filter(array_map(
-            fn($v) => $v['voyage_id'] ?? null,
-            $voyages
-        )));
-
-        if (empty($ids)) {
-            return $voyages;
-        }
-
-        $places = Voyage::whereIn('voyage_id', $ids)
-            ->get(['voyage_id', 'places_disponibles', 'places_reservees'])
-            ->keyBy('voyage_id');
-
-        foreach ($voyages as &$v) {
-            $id = $v['voyage_id'] ?? null;
-            if ($id !== null && isset($places[$id])) {
-                $row = $places[$id];
-                $restantes = (int) $row->places_disponibles - (int) $row->places_reservees;
-                $v['places_disponibles'] = max(0, $restantes);
-                $v['est_complet'] = $restantes <= 0;
-            }
-        }
-        unset($v);
-
-        return $voyages;
     }
 
     /**
@@ -197,56 +145,109 @@ class AccueilService
     }
 
     /**
-     * Récupère les voyages à venir pour l'accueil.
-     * - Si province connue : voyages partant de cette province en priorité,
-     *   puis provinces voisines, puis le reste
-     * - Sinon : rotation aléatoire stable par slot de 2h
+     * Fil des voyages de l'accueil, paginé (défilement infini côté app).
+     *
+     * Ordre :
+     *  1. avec géolocalisation : voyages au départ de la province du client,
+     *     puis à destination de cette province, puis les autres ;
+     *  2. diversité : le prochain départ de CHAQUE trajet passe avant le
+     *     deuxième départ d'un même trajet (un trajet très programmé ne
+     *     monopolise pas le fil) ;
+     *  3. ordre aléatoire stable (rotation toutes les 2 h).
+     *
+     * Seule la liste ordonnée des identifiants est mise en cache (5 min au plus,
+     * invalidée dès qu'un voyage ou une compagnie change) ; le détail de la page
+     * est lu en direct, avec les places et l'état actuels.
      */
-    private function getVoyages(?Province $provinceProche): array
+    public function getVoyagesPage(?Province $provinceProche, int $page = 1, int $parPage = 10): array
     {
-        $slot = $this->getRotationSlot();
+        $parPage = max(1, min($parPage, 30));
+        $ids = $this->getOrdreVoyages($provinceProche);
+        $total = count($ids);
+        $tranche = array_slice($ids, ($page - 1) * $parPage, $parPage);
 
-        $query = Voyage::with([
-            'trajet.provinceDepart',
-            'trajet.provinceArrivee',
-            'trajet.compagnie.modesPaiement',
-            'voiture'
-        ])
-            ->where('voyage_statut', 1)
-            ->where('voyage_date', '>=', now()->toDateString())
-            ->whereRaw('places_disponibles > places_reservees')
-            ->join('fandrio_app.trajets as t', 'voyages.traj_id', '=', 't.traj_id')
-            ->join('fandrio_app.compagnies as c', 't.comp_id', '=', 'c.comp_id')
-            ->where('c.comp_statut', 1)
-            ->where('c.comp_suspendu_commission', false) // Exclure compagnies suspendues (commission impayée)
-            ->select('voyages.*');
-
-        if ($provinceProche) {
-            // Prioriser : départ depuis la province du client, puis arrivée vers cette province
-            $query->orderByRaw("
-                CASE
-                    WHEN t.pro_depart = ? THEN 0
-                    WHEN t.pro_arrivee = ? THEN 1
-                    ELSE 2
-                END ASC
-            ", [$provinceProche->pro_id, $provinceProche->pro_id]);
-
-            // Puis par date
-            $query->orderBy('voyage_date', 'asc');
-            $query->orderBy('voyage_heure_depart', 'asc');
-
-            // Rotation au sein de chaque groupe de priorité
-            $query->orderByRaw("hashint4extended(voyage_id, ?)", [$slot]);
-        } else {
-            // Pas de localisation — rotation aléatoire par slot de 2h
-            $query->orderByRaw("hashint4extended(voyage_id, ?)", [$slot]);
+        $voyages = [];
+        if (!empty($tranche)) {
+            $charges = $this->voyagesVisibles()
+                ->with(['trajet.provinceDepart', 'trajet.provinceArrivee', 'trajet.compagnie.modesPaiement', 'voiture'])
+                ->whereIn('voyages.voyage_id', $tranche)
+                ->get()
+                ->keyBy('voyage_id');
+            // Garder l'ordre du fil ; un voyage devenu complet / en pause entre-temps est omis
+            foreach ($tranche as $id) {
+                if (isset($charges[$id])) {
+                    $voyages[] = $this->formaterVoyage($charges[$id]);
+                }
+            }
         }
 
-        $voyages = $query->limit(10)->get();
+        return [
+            'voyages' => $voyages,
+            'pagination' => [
+                'page' => $page,
+                'par_page' => $parPage,
+                'total' => $total,
+                'a_suivre' => $page * $parPage < $total,
+            ],
+        ];
+    }
 
-        return $voyages->map(function (Voyage $voyage) {
-            return $this->formaterVoyage($voyage);
-        })->toArray();
+    /** Voyages réservables maintenant : programmés, actifs, pas encore partis, avec des places. */
+    private function voyagesVisibles()
+    {
+        $maintenant = now();
+        return Voyage::query()
+            ->join('fandrio_app.trajets as t', 'voyages.traj_id', '=', 't.traj_id')
+            ->join('fandrio_app.compagnies as c', 't.comp_id', '=', 'c.comp_id')
+            ->where('voyages.voyage_statut', 1)
+            ->where('voyages.voyage_is_active', true)
+            ->where(function ($q) use ($maintenant) {
+                $q->where('voyages.voyage_date', '>', $maintenant->toDateString())
+                    ->orWhere(function ($q) use ($maintenant) {
+                        $q->where('voyages.voyage_date', $maintenant->toDateString())
+                            ->where('voyages.voyage_heure_depart', '>', $maintenant->format('H:i:s'));
+                    });
+            })
+            ->whereRaw('voyages.places_disponibles > voyages.places_reservees')
+            ->where('c.comp_statut', 1)
+            ->where('c.comp_suspendu_commission', false) // compagnies suspendues (commission impayée) exclues
+            ->select('voyages.*');
+    }
+
+    /** Liste ordonnée des identifiants du fil (mise en cache). */
+    private function getOrdreVoyages(?Province $provinceProche): array
+    {
+        $slot = $this->getRotationSlot();
+        $cle = 'accueil_ordre:' . self::version() . ':' . ($provinceProche?->pro_id ?? 'aucune') . ':' . $slot;
+
+        return Cache::remember($cle, 300, function () use ($provinceProche, $slot) {
+            $base = $this->voyagesVisibles()
+                ->addSelect('t.pro_depart', 't.pro_arrivee')
+                ->selectRaw('ROW_NUMBER() OVER (PARTITION BY voyages.traj_id ORDER BY voyages.voyage_date, voyages.voyage_heure_depart) AS rang');
+
+            $query = DB::query()->fromSub($base, 'x')->select('x.voyage_id');
+            if ($provinceProche) {
+                $query->orderByRaw(
+                    'CASE WHEN x.pro_depart = ? THEN 0 WHEN x.pro_arrivee = ? THEN 1 ELSE 2 END',
+                    [$provinceProche->pro_id, $provinceProche->pro_id]
+                );
+            }
+            $query->orderBy('x.rang')->orderByRaw('hashint4extended(x.voyage_id, ?)', [$slot]);
+
+            return $query->limit(500)->pluck('voyage_id')->map(fn($id) => (int) $id)->all();
+        });
+    }
+
+    /** Version du fil : change dès qu'un voyage ou une compagnie est modifié. */
+    private static function version(): string
+    {
+        return (string) Cache::rememberForever('accueil_version', fn() => (string) now()->getTimestampMs());
+    }
+
+    /** À appeler quand un voyage ou une compagnie change : le fil est recalculé. */
+    public static function invalider(): void
+    {
+        Cache::forever('accueil_version', (string) now()->getTimestampMs() . random_int(0, 999));
     }
 
     /**

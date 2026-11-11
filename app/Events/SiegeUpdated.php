@@ -37,6 +37,13 @@ class SiegeUpdated implements ShouldBroadcast
         $this->action = $action;
         $this->utilisateurId = $utilisateurId;
         $this->data = $data;
+
+        // Un siège change d'état : le plan du voyage mis en cache (SiegeService)
+        // est périmé. Vidé tout de suite, puis à nouveau après la validation de
+        // la transaction (une lecture concurrente a pu remettre l'ancien état).
+        $cle = 'sieges_voyage_' . $voyageId;
+        \Illuminate\Support\Facades\Cache::forget($cle);
+        \Illuminate\Support\Facades\DB::afterCommit(fn() => \Illuminate\Support\Facades\Cache::forget($cle));
     }
 
     /**

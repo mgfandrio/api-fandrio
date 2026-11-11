@@ -10,6 +10,13 @@ use App\Models\Reservation\Reservation;
 
 class Voyage extends Model 
 {
+    /** Toute création / modification / suppression rafraîchit le fil d'accueil des clients. */
+    protected static function booted(): void
+    {
+        static::saved(fn() => \App\Services\Client\AccueilService::invalider());
+        static::deleted(fn() => \App\Services\Client\AccueilService::invalider());
+    }
+
     use HasFactory;
 
     protected $table = 'fandrio_app.voyages';

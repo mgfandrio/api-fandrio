@@ -5,6 +5,7 @@
 #   ./loadtest/lancer.sh                 test complet (200 clients max)
 #   VUS_MAX=50 DUREE_PALIER=1m ./loadtest/lancer.sh    test réduit
 #   ./loadtest/lancer.sh --arreter       arrête et SUPPRIME la stack de test
+#   OCTANE=1 ./loadtest/lancer.sh        même test avec Laravel Octane (Swoole)
 #
 # Démarre la stack de PRODUCTION (docker-compose.prod.yml) sous un projet
 # Docker séparé "fandrio_loadtest" : base, Redis et volumes dédiés, ta base de
@@ -18,7 +19,12 @@ RACINE="$(pwd)"
 RACINE_DOCKER="$( (pwd -W 2>/dev/null) || pwd )" # chemin compris par Docker Desktop sous Windows
 
 PROJET=fandrio_loadtest
-COMPOSE="docker compose -p $PROJET -f docker-compose.prod.yml"
+# OCTANE=1 : Laravel Octane (Swoole) au lieu de PHP-FPM, pour comparer
+if [ "${OCTANE:-0}" = "1" ]; then
+    COMPOSE="docker compose -p $PROJET -f docker-compose.prod.yml -f docker-compose.octane.yml"
+else
+    COMPOSE="docker compose -p $PROJET -f docker-compose.prod.yml"
+fi
 VUS_MAX="${VUS_MAX:-200}"
 DUREE_PALIER="${DUREE_PALIER:-2m}"
 K6_IMAGE="${K6_IMAGE:-grafana/k6:latest}"

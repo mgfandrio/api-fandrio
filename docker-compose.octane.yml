@@ -1,0 +1,50 @@
+# =============================================================================
+# FANDRIO API — Laravel Octane (Swoole) à la place de PHP-FPM
+# =============================================================================
+# Fichier complémentaire de docker-compose.prod.yml :
+#   docker compose -f docker-compose.prod.yml -f docker-compose.octane.yml up -d --build
+#
+# Retour à PHP-FPM (secours) : relancer SANS ce fichier.
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Octane garde l'application chargée en mémoire : Laravel ne redémarre plus à
+# chaque requête. Points d'attention :
+#   - après un déploiement, les workers doivent être relancés (le --build /
+#     redémarrage du conteneur le fait ; sinon `php artisan octane:reload`) ;
+#   - --max-requests : chaque worker est recyclé après N requêtes (mémoire saine) ;
+#   - les services tymon/jwt-auth sont recréés à chaque requête (config/octane.php).
+#
+# Variables optionnelles (.env) :
+#   OCTANE_WORKERS        nombre de workers (défaut : auto = un par cœur)
+#   OCTANE_MAX_REQUESTS   requêtes avant recyclage d'un worker (défaut 1000)
+# =============================================================================
+
+services:
+  app:
+    command:
+      - sh
+      - -c
+      - >-
+        exec php artisan octane:start
+        --server=swoole
+        --host=0.0.0.0
+        --port=8000
+        --workers=$${OCTANE_WORKERS:-auto}
+        --task-workers=0
+        --max-requests=$${OCTANE_MAX_REQUESTS:-1000}
+    environment:
+      OCTANE_SERVER: swoole
+      # auto = un worker par cœur. Mesuré au test de charge (PC 4 cœurs, 200 clients) :
+      # 4 workers = 57 req/s, p95 2,1 s ; 16 workers = 49 req/s, p95 3,3 s (trop de
+      # workers se disputent le CPU). À réévaluer sur le VPS avec le même test.
+      OCTANE_WORKERS: ${OCTANE_WORKERS:-auto}
+      OCTANE_MAX_REQUESTS: ${OCTANE_MAX_REQUESTS:-1000}
+    healthcheck:
+      test: ["CMD-SHELL", "php -r \"exit(@file_get_contents('http://127.0.0.1:8000/up') === false ? 1 : 0);\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  nginx:
+    volumes:
+      - ./docker/nginx/octane.conf:/etc/nginx/conf.d/default.conf:ro

@@ -9,6 +9,7 @@
         "cloudinary/cloudinary_php": "^3.1",
         "guzzlehttp/guzzle": "^7.2",
         "laravel/framework": "^10.10",
+        "laravel/octane": "^2.5",
         "laravel/reverb": "^1.7",
         "laravel/sanctum": "^3.3",
         "laravel/tinker": "^2.8",

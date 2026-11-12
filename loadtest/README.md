@@ -14,6 +14,7 @@ Pré-requis : Docker Desktop démarré, stack de dev arrêtée (`docker compose 
 ./loadtest/lancer.sh                               # test complet : jusqu'à 200 clients
 VUS_MAX=500 DUREE_PALIER=3m ./loadtest/lancer.sh   # plus de clients, paliers plus longs
 VUS_MAX=5 DUREE_PALIER=20s ./loadtest/lancer.sh    # validation rapide
+OCTANE=1 ./loadtest/lancer.sh                      # même test avec Laravel Octane (Swoole)
 ./loadtest/lancer.sh --arreter                     # supprime la stack de test (et ses données)
 ```
 
@@ -34,6 +35,7 @@ Chaque client virtuel = un client distinct (son propre token), qui répète :
 | Plan de sièges | `GET /api/sieges/voyages/{id}/plan` |
 | Réservation (30 % des parcours) | `POST /api/client/reservation` puis `.../cancel` |
 | Dashboard | `GET /api/client/reservation/dashboard` |
+| Mon compte | `GET /api/moi` : vérifie que l'API reconnaît bien CE client (isolation des sessions, cf. Octane) |
 | Notifications | `GET /api/notifications`, `GET /api/notifications/unread-count` |
 
 Entre chaque écran : 1 à 2,5 s de « réflexion » (≈ 40 requêtes/min par client).
@@ -56,6 +58,7 @@ Objectifs (le test est « réussi » s'ils sont tous tenus, sinon k6 les marque 
 | `http_req_duration{type:ecriture}` p(95) | < 1 s | réservation / annulation |
 | `reservations_en_erreur` | < 1 % | réservations échouées hors conflit de siège |
 | `erreurs_429` | 0 | rate-limit atteint |
+| `mauvaise_identite` | 0 | l'API a répondu avec le compte d'un autre client (fuite de session) |
 
 `conflits_siege` n'est **pas** une erreur : deux clients ont visé le même siège,
 l'API en a refusé un (comportement attendu).

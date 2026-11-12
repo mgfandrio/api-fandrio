@@ -47,6 +47,14 @@ RUN apk add --no-cache --virtual .build-deps $PHPIZE_DEPS \
     && docker-php-ext-enable redis \
     && apk del .build-deps
 
+# Extension Swoole : serveur Laravel Octane (application gardée en mémoire,
+# cf. docker-compose.octane.yml). Inutilisée tant que l'on reste sur PHP-FPM.
+RUN apk add --no-cache libstdc++ \
+    && apk add --no-cache --virtual .build-deps $PHPIZE_DEPS linux-headers openssl-dev \
+    && pecl install -D 'enable-sockets="no" enable-openssl="yes" enable-http2="yes" enable-mysqlnd="no" enable-swoole-json="no" enable-swoole-curl="no" enable-cares="no"' swoole-5.1.6 \
+    && docker-php-ext-enable swoole \
+    && apk del .build-deps
+
 # PHP-FPM : pool dimensionné (l'image officielle plafonne à 5 workers)
 # Valeurs surchargeables via l'environnement du conteneur.
 ENV PHP_FPM_MAX_CHILDREN=30     PHP_FPM_START_SERVERS=8     PHP_FPM_MIN_SPARE_SERVERS=4     PHP_FPM_MAX_SPARE_SERVERS=12

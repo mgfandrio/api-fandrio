@@ -22,6 +22,7 @@ import http from 'k6/http';
 import { check, group, sleep, fail } from 'k6';
 import { Counter, Rate } from 'k6/metrics';
 import { SharedArray } from 'k6/data';
+import encoding from 'k6/encoding';
 import { textSummary } from 'https://jslib.k6.io/k6-summary/0.0.2/index.js';
 
 const BASE_URL = __ENV.BASE_URL || 'http://nginx';
@@ -38,6 +39,8 @@ const reservationsCreees = new Counter('reservations_creees');
 const conflitsSiege = new Counter('conflits_siege');        // siège pris entre-temps : attendu sous charge
 const erreurs429 = new Counter('erreurs_429');              // rate-limit atteint
 const reservationsEnErreur = new Rate('reservations_en_erreur');
+// Isolation des sessions (Octane) : l'API doit reconnaître chaque client comme lui-même
+const mauvaiseIdentite = new Counter('mauvaise_identite');
 
 const palier = (n) => Math.max(1, Math.ceil(n));
 
@@ -66,6 +69,7 @@ export const options = {
         'http_req_duration{type:ecriture}': ['p(95)<1000'],     // 95 % des écritures < 1 s
         reservations_en_erreur: ['rate<0.01'],                  // hors conflits de siège
         erreurs_429: ['count<1'],
+        mauvaise_identite: ['count<1'],                          // jamais le compte d'un autre client
     },
     summaryTrendStats: ['avg', 'med', 'p(90)', 'p(95)', 'p(99)', 'max'],
 };
@@ -138,7 +142,13 @@ export default function (donnees) {
     });
     reflexion();
 
-    group('7. Notifications', () => {
+    group('7. Mon compte (isolation des sessions)', () => {
+        const res = get('/api/moi', h, 'moi');
+        const attendu = idDuJeton(token);
+        if (res.status === 200 && String(res.json('utilisateur.id')) !== attendu) mauvaiseIdentite.add(1);
+    });
+
+    group('8. Notifications', () => {
         get('/api/notifications', h, 'notifications');
         get('/api/notifications/unread-count', h, 'notifications_non_lues');
     });
@@ -207,6 +217,15 @@ function post(chemin, corps, h, nom, type) {
     compter429(res);
     check(res, { [`${nom} : HTTP 200`]: (r) => r.status === 200 });
     return res;
+}
+
+/** Identifiant de l'utilisateur (« sub ») inscrit dans le jeton JWT. */
+function idDuJeton(token) {
+    try {
+        return String(JSON.parse(encoding.b64decode(token.split('.')[1], 'rawurl', 's')).sub);
+    } catch (e) {
+        return '';
+    }
 }
 
 function compter429(res) {

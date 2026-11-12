@@ -34,29 +34,39 @@ class ReservationController extends Controller
             // Les réservations expirées sont libérées par la tâche planifiée
             // `reservations:liberer-expirees` (plus d'écriture à chaque lecture).
             $utilisateur = Auth::user();
-            $reservationsFull = Reservation::with(['voyage.trajet.provinceDepart', 'voyage.trajet.provinceArrivee'])
-                ->where('util_id', $utilisateur->util_id)
-                ->orderBy('created_at', 'desc')
-                ->get();
 
-            // Filtrer pour exclure les abandons (statut 5) des statistiques et de l'historique
-            $reservations = $reservationsFull->whereIn('res_statut', [1, 2, 3, 4]);
+            // Compteurs par statut en une requête agrégée (sans charger les réservations).
+            // Statuts : 1 en attente, 2 confirmée, 4 annulée, 5 abandonnée (ignorée),
+            // 6 annulée par le client (non remboursée).
+            $parStatut = Reservation::where('util_id', $utilisateur->util_id)
+                ->whereIn('res_statut', [1, 2, 4, 6])
+                ->selectRaw('res_statut, COUNT(*) AS n')
+                ->groupBy('res_statut')
+                ->pluck('n', 'res_statut');
+            $n = fn(int $statut) => (int) ($parStatut[$statut] ?? 0);
 
-            // Calcul des statistiques (sémantique côté RÉSERVATION, pas voyage)
-            //  - total_reservations  : réservations confirmées + annulées (exclut "en attente")
-            //  - reservations_confirmees : réservations confirmées (res_statut=2), en attente d'embarquement
-            //  - reservations_annulees   : réservations annulées par l'utilisateur ou la compagnie
+            //  - total_reservations      : confirmées + annulées (exclut « en attente »)
+            //  - reservations_confirmees : payées, en attente d'embarquement
+            //  - reservations_annulees   : annulées par le client ou la compagnie
             $stats = [
-                'total_reservations'      => $reservations->whereIn('res_statut', [2, 4, 6])->count(),
-                'reservations_confirmees' => $reservations->where('res_statut', 2)->count(),
-                'reservations_annulees'   => $reservations->whereIn('res_statut', [4, 6])->count(),
+                'total_reservations'      => $n(2) + $n(4) + $n(6),
+                'reservations_confirmees' => $n(2),
+                'reservations_annulees'   => $n(4) + $n(6),
                 // Alias rétrocompatibilité (à retirer une fois le frontend migré)
-                'voyages_en_cours'        => $reservations->where('res_statut', 2)->count(),
-                'voyages_annules'         => $reservations->where('res_statut', 4)->count(),
+                'voyages_en_cours'        => $n(2),
+                'voyages_annules'         => $n(4) + $n(6),
             ];
 
+            // Seules les 2 dernières réservations sont chargées avec leur voyage
+            $reservations = Reservation::with(['voyage.trajet.provinceDepart', 'voyage.trajet.provinceArrivee'])
+                ->where('util_id', $utilisateur->util_id)
+                ->whereIn('res_statut', [1, 2, 4, 6])
+                ->orderBy('created_at', 'desc')
+                ->limit(2)
+                ->get();
+
             // Historique récent (2 derniers)
-            $historique = $reservations->values()->take(2)->map(function($res) {
+            $historique = $reservations->map(function($res) {
                 return [
                     'id' => $res->res_id,
                     'numero' => $res->res_numero,
@@ -99,7 +109,7 @@ class ReservationController extends Controller
             $utilisateur = Auth::user();
             $reservations = Reservation::with(['voyage.trajet.provinceDepart', 'voyage.trajet.provinceArrivee'])
                 ->where('util_id', $utilisateur->util_id)
-                ->whereIn('res_statut', [1, 2, 3, 4])
+                ->whereIn('res_statut', [1, 2, 4, 6]) // 5 (abandonnée) exclue ; 6 = annulée par le client
                 ->orderBy('created_at', 'desc')
                 ->paginate(15);
 

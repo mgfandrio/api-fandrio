@@ -68,6 +68,33 @@ Fichiers produits dans `loadtest/resultats/` :
 - `docker-stats-<date>.log` : CPU/mémoire de chaque conteneur toutes les 15 s,
   pour identifier le goulot (PHP-FPM `fandrio_app` ? PostgreSQL ? Redis ?).
 
+## Résultats de référence (PC 4 cœurs, 200 clients, 11-12 nov. 2026)
+
+| Configuration | Requêtes/s | Médiane | p(95) |
+|---|---|---|---|
+| PHP-FPM | 41 | 0,74 s | 4,5 s |
+| Octane, 4 workers | 57 à 62 | 0,21 à 0,24 s | 1,4 à 2,1 s |
+| Octane, 16 workers | 49 | 0,17 s | 3,3 s |
+| Octane, 4 workers + opcache CLI + JIT | 62 | 0,19 s | 1,5 s |
+
+Lecture : tous les écrans ont le même temps de réponse sous charge (même `/api/moi`),
+le temps est donc perdu en attente d'un worker libre, pas dans un écran précis.
+Coût fixe d'une requête API mesuré dans le conteneur : authentification ≈ 5 ms
+(jeton, liste noire, utilisateur en base), limite de débit ≈ 1,4 ms ; un aller-retour
+PostgreSQL coûte 1,4 ms sous Docker Desktop (bien moins sur un VPS Linux).
+Le PC sature (API + base + k6 sur 4 cœurs) : refaire la mesure sur le VPS.
+
+## Débit maximal d'un écran (diagnostic)
+
+`debit-max.js` enchaîne les requêtes sans pause sur une seule URL :
+
+```bash
+docker run --rm -i --network fandrio_loadtest_fandrio -v "$(pwd -W)/loadtest:/scripts"   -e API_KEY=... -e CHEMIN=/api/moi -e VUS=20 -e DUREE=20s grafana/k6 run /scripts/debit-max.js
+```
+
+Au-delà de 60 requêtes/min par client, l'API répond 429 (limite de débit) : garder
+`VUS` élevé et `DUREE` courte, ou viser `/up` pour mesurer le serveur seul.
+
 ## Limites
 
 - Lancé sur un PC, le test mesure les capacités **de ce PC** (k6 et l'API se

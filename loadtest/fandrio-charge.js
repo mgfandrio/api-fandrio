@@ -70,6 +70,17 @@ export const options = {
         reservations_en_erreur: ['rate<0.01'],                  // hors conflits de siège
         erreurs_429: ['count<1'],
         mauvaise_identite: ['count<1'],                          // jamais le compte d'un autre client
+        // Sans seuil : fait seulement apparaître le temps de chaque écran dans le résumé
+        'http_req_duration{name:accueil}': [],
+        'http_req_duration{name:recherche}': [],
+        'http_req_duration{name:detail_voyage}': [],
+        'http_req_duration{name:plan_sieges}': [],
+        'http_req_duration{name:reservation}': [],
+        'http_req_duration{name:annulation}': [],
+        'http_req_duration{name:dashboard}': [],
+        'http_req_duration{name:moi}': [],
+        'http_req_duration{name:notifications}': [],
+        'http_req_duration{name:notifications_non_lues}': [],
     },
     summaryTrendStats: ['avg', 'med', 'p(90)', 'p(95)', 'p(99)', 'max'],
 };

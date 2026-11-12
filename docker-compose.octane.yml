@@ -16,7 +16,7 @@
 #
 # Variables optionnelles (.env) :
 #   OCTANE_WORKERS        nombre de workers (défaut : auto = un par cœur)
-#   OCTANE_MAX_REQUESTS   requêtes avant recyclage d'un worker (défaut 1000)
+#   OCTANE_MAX_REQUESTS   requêtes avant recyclage d'un worker (défaut 5000)
 # =============================================================================
 
 services:
@@ -31,14 +31,18 @@ services:
         --port=8000
         --workers=$${OCTANE_WORKERS:-auto}
         --task-workers=0
-        --max-requests=$${OCTANE_MAX_REQUESTS:-1000}
+        --max-requests=$${OCTANE_MAX_REQUESTS:-5000}
     environment:
       OCTANE_SERVER: swoole
       # auto = un worker par cœur. Mesuré au test de charge (PC 4 cœurs, 200 clients) :
       # 4 workers = 57 req/s, p95 2,1 s ; 16 workers = 49 req/s, p95 3,3 s (trop de
       # workers se disputent le CPU). À réévaluer sur le VPS avec le même test.
       OCTANE_WORKERS: ${OCTANE_WORKERS:-auto}
-      OCTANE_MAX_REQUESTS: ${OCTANE_MAX_REQUESTS:-1000}
+      OCTANE_MAX_REQUESTS: ${OCTANE_MAX_REQUESTS:-5000}
+    volumes:
+      - storage:/var/www/storage
+      # opcache en ligne de commande + JIT (cf. docker/php/octane.ini)
+      - ./docker/php/octane.ini:/usr/local/etc/php/conf.d/zz-octane.ini:ro
     healthcheck:
       test: ["CMD-SHELL", "php -r \"exit(@file_get_contents('http://127.0.0.1:8000/up') === false ? 1 : 0);\""]
       interval: 10s

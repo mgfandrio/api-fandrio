@@ -255,11 +255,13 @@ Route::middleware(['api.key', 'auth:api', 'role:2'])->prefix('adminCompagnie')->
     Route::prefix('voyage')->group(function () {
         Route::get('/recupererListeVoyage', [VoyageController::class, 'index']);
         Route::get('/statistiques', [VoyageController::class, 'statistiques']);
+        Route::get('/rappels-publication', [VoyageController::class, 'rappelsPublication']);
         Route::post('/programmerVoyage', [VoyageController::class, 'store']);
         Route::post('/programmerVoyagesMultiples', [VoyageController::class, 'storeMultiple']);
         Route::get('/detailVoyage/{id}', [VoyageController::class,  'show']);
         Route::put('/updateVoyage/{id}', [VoyageController::class, 'update']);
         Route::patch('/{id}/annuler', [VoyageController::class, 'annuler']);
+        Route::patch('/{id}/publier', [VoyageController::class, 'publier']);
         Route::patch('/{id}/reactiver', [VoyageController::class, 'reactiver']);
         Route::patch('/{id}/toggler-activation', [VoyageController::class, 'togglerActivation']);
         Route::post('/{id}/reprogrammer', [VoyageController::class, 'reprogrammer']);

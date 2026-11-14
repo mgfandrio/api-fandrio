@@ -235,6 +235,12 @@ CREATE TABLE fandrio_app.voyages (
     -- programmé ou en cours. Terminé ou annulé ⇒ forcément is_active=false.
     CONSTRAINT voyages_active_statut_invariant
         CHECK (voyage_is_active = false OR voyage_statut IN (1, 2)),
+    -- Publication : FALSE = planifié mais non publié (invisible des clients, donc toujours inactif).
+    -- voyage_publication_prevue : instant (UTC) de publication automatique, NULL = manuelle.
+    voyage_publie BOOLEAN NOT NULL DEFAULT TRUE,
+    voyage_publication_prevue TIMESTAMP NULL,
+    CONSTRAINT voyages_non_publie_inactif
+        CHECK (voyage_publie = true OR voyage_is_active = false),
     places_disponibles INTEGER NOT NULL,
     places_reservees INTEGER DEFAULT 0 CHECK (places_reservees >= 0),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -575,6 +581,9 @@ CREATE INDEX idx_voyages_statut_date ON fandrio_app.voyages(voyage_statut, voyag
 CREATE INDEX idx_voyages_trajet ON fandrio_app.voyages(traj_id);
 -- Disponibilité d'un véhicule à une date
 CREATE INDEX idx_voyages_voiture ON fandrio_app.voyages(voit_id);
+-- Voyages planifiés à publier automatiquement (tâche voyages:publier, chaque minute)
+CREATE INDEX idx_voyages_publication_prevue ON fandrio_app.voyages(voyage_publication_prevue)
+    WHERE voyage_publie = false AND voyage_publication_prevue IS NOT NULL;
 
 -- Trajets
 CREATE INDEX idx_trajets_compagnie ON fandrio_app.trajets(comp_id);

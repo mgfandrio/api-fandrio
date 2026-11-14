@@ -167,6 +167,14 @@ class CompagnieService
             ->whereIn('traj_id', $trajetsIds)
             ->whereIn('voyage_statut', [1, 2])
             ->where('voyage_is_active', false)
+            ->where('voyage_publie', true) // les voyages planifiés non publiés ne sont pas « en pause »
+            ->count();
+
+        // Planifiés : prévus par la compagnie, pas encore publiés (invisibles des clients)
+        $voyagesNonPublies = DB::table('fandrio_app.voyages')
+            ->whereIn('traj_id', $trajetsIds)
+            ->where('voyage_statut', 1)
+            ->where('voyage_publie', false)
             ->count();
 
         $voyagesTermines = DB::table('fandrio_app.voyages')
@@ -183,7 +191,7 @@ class CompagnieService
         $voyagesActifs = $voyagesOuverts;
         $voyagesInactifs = $voyagesEnPause + $voyagesTermines;
 
-        $voyagesTotal = $voyagesOuverts + $voyagesEnPause + $voyagesTermines + $voyagesAnnules;
+        $voyagesTotal = $voyagesOuverts + $voyagesEnPause + $voyagesNonPublies + $voyagesTermines + $voyagesAnnules;
 
         // Statistiques des chauffeurs
         // Statut: 1 = Actif, 2 = Inactif, 3 = Supprimé
@@ -209,6 +217,7 @@ class CompagnieService
                 // Nouvelles clés (sémantique claire)
                 'ouverts'   => $voyagesOuverts,
                 'en_pause'  => $voyagesEnPause,
+                'non_publies' => $voyagesNonPublies,
                 'termines'  => $voyagesTermines,
                 'annules'   => $voyagesAnnules,
                 'total'     => $voyagesTotal,

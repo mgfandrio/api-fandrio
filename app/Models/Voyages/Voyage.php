@@ -30,6 +30,8 @@ class Voyage extends Model
         'voit_id',
         'voyage_statut',
         'voyage_is_active',
+        'voyage_publie',
+        'voyage_publication_prevue',
         'places_disponibles',
         'places_reservees'
     ];
@@ -38,6 +40,8 @@ class Voyage extends Model
         'voyage_date' => 'date',
         'voyage_heure_depart' => 'string',
         'voyage_is_active' => 'boolean',
+        'voyage_publie' => 'boolean',
+        'voyage_publication_prevue' => 'datetime',
         'places_disponibles' => 'integer',
         'places_reservees' => 'integer',
         'created_at' => 'datetime',

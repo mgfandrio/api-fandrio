@@ -18,7 +18,7 @@ class VoyageController extends Controller
     public function index(Request $request): JsonResponse
     {
          try {
-            $filtres = $request->only(['date_debut', 'date_fin', 'statut', 'traj_id', 'per_page', 'sort_field', 'sort_direction']);
+            $filtres = $request->only(['date_debut', 'date_fin', 'statut', 'a_venir', 'passes', 'publie', 'traj_id', 'voit_id', 'chauff_id', 'per_page', 'sort_field', 'sort_direction']);
             $resultat = $this->voyageService->listerVoyages($filtres);
 
             return response()->json([
@@ -69,15 +69,18 @@ class VoyageController extends Controller
                 'traj_id' => 'required|integer|exists:trajets,traj_id',
                 'voit_id' => 'required|integer|exists:voitures,voit_id',
                 'voyage_type' => 'sometimes|integer|in:1,2',
-                'places_disponibles' => 'required|integer|min:1'
+                'places_disponibles' => 'required|integer|min:1',
+                // Publication : maintenant (défaut), plus_tard (planifié, non publié) ou programmée à publication_date
+                'publication' => 'sometimes|string|in:maintenant,plus_tard,programmee',
+                'publication_date' => 'required_if:publication,programmee|nullable|date',
             ]);
 
             $voyageDTO = VoyageDTO::fromRequest($request->all());
-            $voyage = $this->voyageService->programmerVoyage($voyageDTO);
+            $voyage = $this->voyageService->programmerVoyage($voyageDTO, $this->publicationDemandee($request));
 
             return response()->json([
                 'statut' => true,
-                'message' => 'Voyage programmé avec succès',
+                'message' => $this->messagePublication($request, 1),
                 'data' => $voyage
             ], 201);
 
@@ -131,11 +134,18 @@ class VoyageController extends Controller
                 'traj_id' => 'required|integer|exists:trajets,traj_id',
                 'voit_id' => 'required|integer|exists:voitures,voit_id',
                 'voyage_type' => 'sometimes|integer|in:1,2',
-                'places_disponibles' => 'required|integer|min:1'
+                'places_disponibles' => 'required|integer|min:1',
+                // Publication : maintenant (défaut), plus_tard (planifié, non publié) ou programmée à publication_date
+                'publication' => 'sometimes|string|in:maintenant,plus_tard,programmee',
+                'publication_date' => 'required_if:publication,programmee|nullable|date',
             ]);
 
             $voyageDTO = VoyageDTO::fromRequest($request->all());
-            $voyage = $this->voyageService->mettreAJourVoyage($id, $voyageDTO);
+            $voyage = $this->voyageService->mettreAJourVoyage(
+                $id,
+                $voyageDTO,
+                $request->has('publication') ? $this->publicationDemandee($request) : null
+            );
 
             return response()->json([
                 'statut' => true,
@@ -173,13 +183,21 @@ class VoyageController extends Controller
                 'voyages.*.voit_id' => 'required|integer|exists:voitures,voit_id',
                 'voyages.*.voyage_type' => 'sometimes|integer|in:1,2',
                 'voyages.*.places_disponibles' => 'required|integer|min:1',
+                // Publication propre à un voyage (prioritaire sur celle du lot)
+                'voyages.*.publication' => 'sometimes|string|in:maintenant,plus_tard,programmee',
+                'voyages.*.publication_date' => 'nullable|date',
+                // Publication : maintenant (défaut), plus_tard (planifié, non publié) ou programmée à publication_date
+                'publication' => 'sometimes|string|in:maintenant,plus_tard,programmee',
+                'publication_date' => 'required_if:publication,programmee|nullable|date',
             ]);
 
-            $resultat = $this->voyageService->programmerVoyagesMultiples($request->input('voyages'));
+            $resultat = $this->voyageService->programmerVoyagesMultiples($request->input('voyages'), $this->publicationDemandee($request));
 
             return response()->json([
                 'statut' => true,
-                'message' => $resultat['message'],
+                'message' => empty($resultat['erreurs']) && $request->input('publication', 'maintenant') !== 'maintenant'
+                    ? $this->messagePublication($request, (int) $resultat['total_crees'])
+                    : $resultat['message'],
                 'data' => $resultat
             ], 201);
 
@@ -239,6 +257,55 @@ class VoyageController extends Controller
                 'message' => $this->messageErreur($e)
             ], 400);
         }
+    }
+
+    /**
+     * Rappels de publication affichés dans l'onglet Planning.
+     * GET /api/adminCompagnie/voyage/rappels-publication
+     */
+    public function rappelsPublication(): JsonResponse
+    {
+        try {
+            return response()->json(['statut' => true, 'data' => $this->voyageService->rappelsPublication()]);
+        } catch (\Exception $e) {
+            return response()->json(['statut' => false, 'message' => $this->messageErreur($e)], 500);
+        }
+    }
+
+    /**
+     * Publie tout de suite un voyage planifié (non publié).
+     * PATCH /api/adminCompagnie/voyage/{id}/publier
+     */
+    public function publier(int $id): JsonResponse
+    {
+        try {
+            return response()->json([
+                'statut' => true,
+                'message' => 'Voyage publié : il est maintenant visible et ouvert aux réservations.',
+                'data' => $this->voyageService->publierVoyage($id),
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['statut' => false, 'message' => $this->messageErreur($e)], 400);
+        }
+    }
+
+    /** Choix de publication transmis par l'app ({mode, date}). */
+    private function publicationDemandee(Request $request): array
+    {
+        return [
+            'mode' => $request->input('publication', 'maintenant'),
+            'date' => $request->input('publication_date'),
+        ];
+    }
+
+    private function messagePublication(Request $request, int $nb): string
+    {
+        $pluriel = $nb > 1;
+        return match ($request->input('publication', 'maintenant')) {
+            'plus_tard' => $pluriel ? 'Voyages planifiés : ils ne sont pas encore publiés, les clients ne les voient pas.' : 'Voyage planifié : il n\'est pas encore publié, les clients ne le voient pas.',
+            'programmee' => $pluriel ? 'Voyages planifiés : ils seront publiés automatiquement à la date choisie.' : 'Voyage planifié : il sera publié automatiquement à la date choisie.',
+            default => $pluriel ? 'Voyages programmés avec succès' : 'Voyage programmé avec succès',
+        };
     }
 
     /**

@@ -11,7 +11,10 @@ class RecuperationListeVoitureController extends Controller
     public function listeVoitures(Request $request)
     {
         $compagnieId = $request->user()->comp_id;
-        $voitures = Voitures::where('comp_id', $compagnieId)->get();
+        // Avec le chauffeur affecté (affiché dans le choix du véhicule d'un voyage)
+        $voitures = Voitures::with('chauffeur:chauff_id,chauff_nom,chauff_prenom,chauff_phone')
+            ->where('comp_id', $compagnieId)
+            ->get();
 
         if ($voitures->isEmpty()) {
             return response()->json([

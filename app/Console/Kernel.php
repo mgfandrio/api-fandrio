@@ -22,6 +22,9 @@ class Kernel extends ConsoleKernel
         // (anciennement exécuté à chaque GET plan de sièges / dashboard client)
         $schedule->command('reservations:liberer-expirees')->everyMinute()->withoutOverlapping();
 
+        // Publication automatique des voyages planifiés (non publiés) dont la date de publication est atteinte
+        $schedule->command('voyages:publier')->everyMinute()->withoutOverlapping();
+
         // Gestion automatique des statuts de voyages (chaque minute : remplace
         // aussi autoCompleterVoyages(), anciennement exécuté à chaque GET admin)
         $schedule->command('voyages:gestion-statuts')->everyMinute()->withoutOverlapping();

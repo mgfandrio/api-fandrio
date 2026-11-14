@@ -35,9 +35,9 @@ class VoyageService
     /**
      * Programmer un nouveau voyage.
      */
-    public function programmerVoyage(VoyageDTO $voyageDTO): array 
+    public function programmerVoyage(VoyageDTO $voyageDTO, array $publication = []): array 
     {
-        return DB::transaction(function () use ($voyageDTO) {
+        return DB::transaction(function () use ($voyageDTO, $publication) {
             $compagnieId = $this->getCompagnieUtilisateur();
 
             // Valider le DTO
@@ -74,7 +74,7 @@ class VoyageService
                 'voyage_statut' => 1, // Programmé
                 'places_disponibles' => $voyageDTO->placesDisponibles,
                 'places_reservees' => 0
-            ]);
+            ] + $this->champsPublication($publication, $voyageDTO->voyageDate, $voyageDTO->voyageHeureDepart));
 
             return $this->formaterVoyageComplet($voyage);
         });
@@ -84,9 +84,9 @@ class VoyageService
     /**
      * Programmer plusieurs voyages en une seule opération.
      */
-    public function programmerVoyagesMultiples(array $voyagesData): array
+    public function programmerVoyagesMultiples(array $voyagesData, array $publication = []): array
     {
-        return DB::transaction(function () use ($voyagesData) {
+        return DB::transaction(function () use ($voyagesData, $publication) {
             $compagnieId = $this->getCompagnieUtilisateur();
 
             $voyagesCrees = [];
@@ -142,7 +142,14 @@ class VoyageService
                         'voyage_statut' => 1,
                         'places_disponibles' => $voyageDTO->placesDisponibles,
                         'places_reservees' => 0,
-                    ]);
+                    ] + $this->champsPublication(
+                        // Publication propre à ce voyage si elle est fournie, sinon celle du lot
+                        isset($data['publication'])
+                            ? ['mode' => $data['publication'], 'date' => $data['publication_date'] ?? null]
+                            : $publication,
+                        $voyageDTO->voyageDate,
+                        $voyageDTO->voyageHeureDepart
+                    ));
 
                     $voyagesCrees[] = $this->formaterVoyageComplet($voyage);
                 } catch (\Exception $e) {
@@ -172,6 +179,146 @@ class VoyageService
 
 
     /**
+     * Champs de publication d'un voyage à partir du choix de la compagnie.
+     *
+     * $publication['mode'] :
+     *   - 'maintenant' (défaut) : publié tout de suite ;
+     *   - 'plus_tard'           : planifié sans être publié, publication manuelle plus tard ;
+     *   - 'programmee'          : non publié, publié automatiquement à
+     *                             $publication['date'] (instant ISO 8601 avec fuseau).
+     */
+    private function champsPublication(array $publication, string $date, string $heure): array
+    {
+        $mode = $publication['mode'] ?? 'maintenant';
+
+        if ($mode === 'plus_tard') {
+            return ['voyage_publie' => false, 'voyage_is_active' => false, 'voyage_publication_prevue' => null];
+        }
+
+        if ($mode === 'programmee') {
+            if (empty($publication['date'])) {
+                throw new \Exception('Indiquez la date de publication.');
+            }
+            $instant = \Carbon\Carbon::parse($publication['date'])->utc();
+            if ($instant->lte(now())) {
+                throw new \Exception('La date de publication doit être dans le futur.');
+            }
+            // Le départ est saisi en heure locale des voyages
+            $depart = \Carbon\Carbon::parse("{$date} {$heure}", config('app.fuseau_voyages', 'Indian/Antananarivo'));
+            if ($instant->gte($depart)) {
+                throw new \Exception("La publication doit avoir lieu avant le départ du {$depart->format('d/m/Y')} à {$depart->format('H:i')}.");
+            }
+            return ['voyage_publie' => false, 'voyage_is_active' => false, 'voyage_publication_prevue' => $instant];
+        }
+
+        return ['voyage_publie' => true, 'voyage_is_active' => true, 'voyage_publication_prevue' => null];
+    }
+
+    /**
+     * Publie tout de suite un voyage planifié : il devient visible et réservable.
+     */
+    public function publierVoyage(int $voyageId): array
+    {
+        return DB::transaction(function () use ($voyageId) {
+            $compagnieId = $this->getCompagnieUtilisateur();
+
+            $voyage = Voyage::whereHas('trajet', function ($q) use ($compagnieId) {
+                $q->where('comp_id', $compagnieId);
+            })->lockForUpdate()->findOrFail($voyageId);
+
+            if ($voyage->voyage_publie) {
+                throw new \Exception('Ce voyage est déjà publié.');
+            }
+            if ((int) $voyage->voyage_statut !== 1) {
+                throw new \Exception('Seul un voyage programmé peut être publié.');
+            }
+            if (!$voyage->estFutur()) {
+                throw new \Exception('La date de ce voyage est passée : modifiez-la avant de le publier.');
+            }
+
+            $voyage->update([
+                'voyage_publie' => true,
+                'voyage_is_active' => true,
+                'voyage_publication_prevue' => null,
+            ]);
+
+            return $this->formaterVoyageComplet($voyage->fresh(['trajet.provinceDepart', 'trajet.provinceArrivee', 'voiture']));
+        });
+    }
+
+    /**
+     * Publie les voyages planifiés dont la date de publication est atteinte
+     * (tâche planifiée `voyages:publier`). Renvoie le nombre de voyages publiés.
+     */
+    public function publierVoyagesProgrammes(): int
+    {
+        $aPublier = Voyage::where('voyage_publie', false)
+            ->whereNotNull('voyage_publication_prevue')
+            ->where('voyage_publication_prevue', '<=', now())
+            ->where('voyage_statut', 1)
+            ->get();
+
+        $publies = 0;
+        foreach ($aPublier as $voyage) {
+            // Départ déjà passé : on ne publie pas, le voyage reste non publié, sans date
+            $futur = $voyage->estFutur();
+            $voyage->update($futur
+                ? ['voyage_publie' => true, 'voyage_is_active' => true, 'voyage_publication_prevue' => null]
+                : ['voyage_publication_prevue' => null]);
+            $publies += $futur ? 1 : 0;
+        }
+
+        return $publies;
+    }
+
+    /**
+     * Rappels de publication pour l'onglet Planning : voyages planifiés mais pas
+     * encore publiés qui demandent l'attention de la compagnie.
+     *
+     *  - 'bientot_publies' : publication automatique programmée dans les
+     *    $jours prochains jours (dernier moment pour vérifier date, heure,
+     *    véhicule et chauffeur) ;
+     *  - 'a_publier' : aucune date de publication alors que le départ a lieu
+     *    dans les $jours prochains jours (à publier à la main, sinon personne
+     *    ne pourra réserver).
+     */
+    public function rappelsPublication(int $jours = 3): array
+    {
+        $compagnieId = $this->getCompagnieUtilisateur();
+        $fuseau = config('app.fuseau_voyages', 'Indian/Antananarivo');
+        $aujourdhui = now($fuseau)->toDateString();
+        $limiteDepart = now($fuseau)->addDays($jours)->toDateString();
+
+        $base = fn() => Voyage::with(['trajet.provinceDepart', 'trajet.provinceArrivee', 'voiture.chauffeur'])
+            ->whereHas('trajet', fn($q) => $q->where('comp_id', $compagnieId))
+            ->where('voyage_statut', 1)
+            ->where('voyage_publie', false)
+            ->where('voyage_date', '>=', $aujourdhui);
+
+        $bientotPublies = $base()
+            ->whereNotNull('voyage_publication_prevue')
+            ->where('voyage_publication_prevue', '<=', now()->addDays($jours))
+            ->orderBy('voyage_publication_prevue')
+            ->limit(50)
+            ->get();
+
+        $aPublier = $base()
+            ->whereNull('voyage_publication_prevue')
+            ->where('voyage_date', '<=', $limiteDepart)
+            ->orderBy('voyage_date')
+            ->orderBy('voyage_heure_depart')
+            ->limit(50)
+            ->get();
+
+        return [
+            'jours' => $jours,
+            'total' => $bientotPublies->count() + $aPublier->count(),
+            'bientot_publies' => $bientotPublies->map(fn($v) => $this->formaterVoyageComplet($v))->values(),
+            'a_publier' => $aPublier->map(fn($v) => $this->formaterVoyageComplet($v))->values(),
+        ];
+    }
+
+    /**
      * Récupère la liste des voyages de la compagnie
      */
     public function listerVoyages(array $filtres = []): array 
@@ -181,11 +328,11 @@ class VoyageService
         // Statuts (complet / départ atteint → En cours ; Terminé ; Annulé) mis à
         // jour par la tâche planifiée `voyages:gestion-statuts` (chaque minute).
 
-        $query = Voyage::with(['trajet.provinceDepart', 'trajet.provinceArrivee', 'voiture'])
+        $query = Voyage::with(['trajet.provinceDepart', 'trajet.provinceArrivee', 'voiture.chauffeur'])
             ->whereHas('trajet', function($q) use ($compagnieId) {
                 $q->where('comp_id', $compagnieId);
             });
-        
+
         // Filtrage par date
         if (isset($filtres['date_debut'])) {
             $query->where('voyage_date', '>=', $filtres['date_debut']);
@@ -200,17 +347,48 @@ class VoyageService
             $query->where('voyage_statut', $filtres['statut']);
         }
 
+        // Planning : voyages programmés ou en cours (publiés ou non)
+        if (filter_var($filtres['a_venir'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
+            $query->whereIn('voyage_statut', [1, 2]);
+        }
+
+        // Historique : voyages terminés ou annulés
+        if (filter_var($filtres['passes'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
+            $query->whereIn('voyage_statut', [3, 4]);
+        }
+
+        // Publication : 1 = publiés, 0 = planifiés non publiés
+        if (isset($filtres['publie']) && $filtres['publie'] !== '') {
+            $query->where('voyage_publie', filter_var($filtres['publie'], FILTER_VALIDATE_BOOLEAN));
+        }
+
         // Filtrage par trajet
         if (isset($filtres['traj_id'])) {
             $query->where('traj_id', $filtres['traj_id']);
         }
 
-        // Tri par défaut : date de voyage
-        $sortField = $filtres['sort_field'] ?? 'voyage_date';
-        $sortDirection = $filtres['sort_direction'] ?? 'asc';
-        $query->orderBy($sortField, $sortDirection);
+        // Filtrage par véhicule
+        if (isset($filtres['voit_id'])) {
+            $query->where('voit_id', $filtres['voit_id']);
+        }
 
-        $voyages = $query->paginate($filtres['per_page'] ?? 15);
+        // Filtrage par chauffeur (celui du véhicule affecté)
+        if (isset($filtres['chauff_id'])) {
+            $query->whereHas('voiture', fn($q) => $q->where('chauff_id', $filtres['chauff_id']));
+        }
+
+        // Tri : colonnes autorisées seulement, puis heure de départ
+        $sortField = in_array($filtres['sort_field'] ?? null, ['voyage_date', 'voyage_heure_depart', 'created_at', 'places_reservees'], true)
+            ? $filtres['sort_field']
+            : 'voyage_date';
+        $sortDirection = strtolower((string) ($filtres['sort_direction'] ?? 'asc')) === 'desc' ? 'desc' : 'asc';
+        $query->orderBy($sortField, $sortDirection);
+        if ($sortField !== 'voyage_heure_depart') {
+            $query->orderBy('voyage_heure_depart', $sortDirection);
+        }
+
+        $perPage = max(1, min((int) ($filtres['per_page'] ?? 15), 200));
+        $voyages = $query->paginate($perPage);
 
         return [
             'voyages' => $voyages->map(function($voyage) {
@@ -252,9 +430,9 @@ class VoyageService
     /**
      * Met à jour un voyage
      */
-    public function mettreAjourVoyage(int $voyageId, VoyageDTO $voyageDTO): array 
+    public function mettreAjourVoyage(int $voyageId, VoyageDTO $voyageDTO, ?array $publication = null): array 
     {
-        return DB::transaction(function () use ($voyageId, $voyageDTO) {
+        return DB::transaction(function () use ($voyageId, $voyageDTO, $publication) {
             $compagnieId = $this->getCompagnieUtilisateur();
 
             $voyage = Voyage::whereHas('trajet', function($q) use ($compagnieId) {
@@ -264,21 +442,47 @@ class VoyageService
             // Valider le DTO
             $voyageDTO->validate();
 
-            // Vérifier que le nouveau trajet appartient à la compagnie
-            if ($voyageDTO->trajId != $voyage->traj_id) {
-                $trajet = Trajet::where('comp_id', $compagnieId)
-                    ->findOrFail($voyageDTO->trajId);
+            // Le trajet (nouveau ou inchangé) appartient à la compagnie
+            $trajet = Trajet::where('comp_id', $compagnieId)->findOrFail($voyageDTO->trajId);
+
+            $voitureChangee = $voyageDTO->voitId != $voyage->voit_id;
+            $dateChangee = $voyageDTO->voyageDate !== $voyage->voyage_date->toDateString();
+
+            // Le véhicule (nouveau ou inchangé) : un nouveau véhicule doit être actif
+            $voiture = Voitures::where('comp_id', $compagnieId)
+                ->when($voitureChangee, fn($q) => $q->where('voit_statut', 1))
+                ->findOrFail($voyageDTO->voitId);
+
+            // Véhicule ou date modifié : le véhicule ne doit pas déjà rouler ce jour-là
+            // (sans compter ce voyage lui-même)
+            if ($voitureChangee || $dateChangee) {
+                $dejaPris = Voyage::where('voit_id', $voiture->voit_id)
+                    ->where('voyage_date', $voyageDTO->voyageDate)
+                    ->whereIn('voyage_statut', [1, 2])
+                    ->where('voyage_id', '!=', $voyage->voyage_id)
+                    ->exists();
+                if ($dejaPris) {
+                    throw new \Exception("Le véhicule {$voiture->voit_matricule} a déjà un voyage le " . \Carbon\Carbon::parse($voyageDTO->voyageDate)->format('d/m/Y') . '.');
+                }
             }
 
-            // Vérifier que la nouvelle voiture appartient à la compagnie
-            if ($voyageDTO->voitId != $voyage->voit_id) {
-                $voiture = Voitures::where('comp_id', $compagnieId)
-                    ->where('voit_statut', 1)
-                    ->findOrFail($voyageDTO->voitId);
+            if ($voyageDTO->placesDisponibles > $voiture->voit_places) {
+                throw new \Exception("Le véhicule {$voiture->voit_matricule} n'a que {$voiture->voit_places} places.");
+            }
 
-                // Vérifier disponibilité de la voiture
-                if (!$voiture->estDisponiblePourDate($voyageDTO->voyageDate)) {
-                    throw new \Exception('La nouvelle voiture n\'est pas disponible pour cette date');
+            // Cohérence catégorie : le véhicule doit être de la même catégorie que le trajet
+            $this->assertCoherenceCategorie($trajet, $voiture);
+
+            // Changement de véhicule avec des billets déjà vendus : leurs sièges doivent exister
+            if ($voitureChangee && $voyage->places_reservees > 0) {
+                $plusGrandSiege = (int) DB::table('fandrio_app.reservation_voyageurs as rv')
+                    ->join('fandrio_app.reservations as r', 'r.res_id', '=', 'rv.res_id')
+                    ->where('r.voyage_id', $voyage->voyage_id)
+                    ->whereIn('r.res_statut', [1, 2])
+                    ->max('rv.place_numero');
+                $placesPlan = $voiture->planSiege?->getNombreTotalSieges() ?? $voiture->voit_places;
+                if ($plusGrandSiege > $placesPlan) {
+                    throw new \Exception("Le siège {$plusGrandSiege} est déjà vendu sur ce voyage, mais le véhicule {$voiture->voit_matricule} n'a que {$placesPlan} places.");
                 }
             }
 
@@ -294,7 +498,11 @@ class VoyageService
                 'traj_id' => $voyageDTO->trajId,
                 'voit_id' => $voyageDTO->voitId,
                 'places_disponibles' => $voyageDTO->placesDisponibles
-            ]);
+            ]
+                // La publication ne se règle que tant que le voyage n'est pas publié
+                + ($publication !== null && !$voyage->voyage_publie
+                    ? $this->champsPublication($publication, $voyageDTO->voyageDate, $voyageDTO->voyageHeureDepart)
+                    : []));
 
             return $this->formaterVoyageComplet($voyage);
         });
@@ -443,7 +651,7 @@ class VoyageService
 
             $voyage->update([
                 'voyage_statut' => 1,
-                'voyage_is_active' => true,
+                'voyage_is_active' => (bool) $voyage->voyage_publie, // un voyage non publié reste invisible
             ]);
 
             return $this->formaterVoyageComplet($voyage->fresh(['trajet.provinceDepart', 'trajet.provinceArrivee', 'voiture']));
@@ -471,6 +679,10 @@ class VoyageService
 
             if (!in_array($voyage->voyage_statut, [1, 2], true)) {
                 throw new \Exception('Seuls les voyages programmés ou en cours peuvent être mis en pause / réactivés. Pour un voyage annulé, utilisez \"réactiver\" ou \"reprogrammer\".');
+            }
+
+            if (!$voyage->voyage_publie) {
+                throw new \Exception('Ce voyage n\'est pas encore publié : publiez-le pour l\'ouvrir aux réservations.');
             }
 
             $voyage->update([
@@ -616,6 +828,9 @@ class VoyageService
             'type' => $voyage->voyage_type,
             'statut' => $voyage->voyage_statut,
             'is_active' => $voyage->voyage_is_active,
+            // Publication : false = planifié mais non publié (invisible des clients)
+            'publie' => (bool) ($voyage->voyage_publie ?? true),
+            'publication_prevue' => $voyage->voyage_publication_prevue?->toIso8601String(),
             'places_disponibles' => $voyage->places_disponibles,
             'places_reservees' => $voyage->places_reservees,
             'places_libres' => $voyage->getPlacesLibres(),
@@ -634,7 +849,14 @@ class VoyageService
                 'marque' => $voyage->voiture->voit_marque,
                 'modele' => $voyage->voiture->voit_modele,
                 'capacite' => $voyage->voiture->voit_places,
-                'categorie' => $voyage->voiture->voit_categorie ?? 'classique'
+                'categorie' => $voyage->voiture->voit_categorie ?? 'classique',
+                // Chauffeur affecté au véhicule (null si aucun)
+                'chauffeur' => $voyage->voiture->chauffeur ? [
+                    'id' => $voyage->voiture->chauffeur->chauff_id,
+                    'nom' => $voyage->voiture->chauffeur->chauff_nom,
+                    'prenom' => $voyage->voiture->chauffeur->chauff_prenom,
+                    'telephone' => $voyage->voiture->chauffeur->chauff_phone,
+                ] : null,
             ],
             'categorie' => $voyage->voyage_categorie
         ];

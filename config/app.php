@@ -73,6 +73,12 @@ return [
     'timezone' => 'UTC',
 
     /*
+    | Fuseau dans lequel les compagnies saisissent la date et l'heure de départ
+    | des voyages (colonnes voyage_date / voyage_heure_depart, sans fuseau).
+    */
+    'fuseau_voyages' => env('FUSEAU_VOYAGES', 'Indian/Antananarivo'),
+
+    /*
     |--------------------------------------------------------------------------
     | Application Locale Configuration
     |--------------------------------------------------------------------------

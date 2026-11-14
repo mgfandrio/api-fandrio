@@ -199,7 +199,9 @@ class VoyageService
             if (empty($publication['date'])) {
                 throw new \Exception('Indiquez la date de publication.');
             }
-            $instant = \Carbon\Carbon::parse($publication['date'])->utc();
+            // Instant envoyé par l'app (avec son décalage) ramené au fuseau de l'API,
+            // celui dans lequel la colonne (sans fuseau) est enregistrée et relue
+            $instant = \Carbon\Carbon::parse($publication['date'])->setTimezone(config('app.timezone'));
             if ($instant->lte(now())) {
                 throw new \Exception('La date de publication doit être dans le futur.');
             }

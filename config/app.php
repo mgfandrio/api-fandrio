@@ -70,13 +70,17 @@ return [
     |
     */
 
-    'timezone' => 'UTC',
+    // Heure de Madagascar : les compagnies saisissent les départs dans ce fuseau
+    // et les clients vivent dans ce fuseau. Toutes les comparaisons « maintenant /
+    // départ » de l'API, les tâches planifiées (dailyAt) et les dates enregistrées
+    // par Laravel utilisent ce fuseau (pas d'heure d'été à Madagascar).
+    'timezone' => env('APP_TIMEZONE', 'Indian/Antananarivo'),
 
     /*
     | Fuseau dans lequel les compagnies saisissent la date et l'heure de départ
     | des voyages (colonnes voyage_date / voyage_heure_depart, sans fuseau).
     */
-    'fuseau_voyages' => env('FUSEAU_VOYAGES', 'Indian/Antananarivo'),
+    'fuseau_voyages' => env('FUSEAU_VOYAGES', env('APP_TIMEZONE', 'Indian/Antananarivo')),
 
     /*
     |--------------------------------------------------------------------------

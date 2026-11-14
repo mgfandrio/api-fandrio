@@ -75,6 +75,10 @@ return [
             'prefix' => '',
             'prefix_indexes' => true,
             'search_path' => 'fandrio_app, public',
+            // Même fuseau que l'application pour la session PostgreSQL : CURRENT_TIMESTAMP,
+            // now() et les valeurs par défaut des colonnes restent cohérents avec Laravel,
+            // quel que soit le fuseau du serveur PostgreSQL (UTC dans Docker).
+            'timezone' => env('DB_TIMEZONE', env('APP_TIMEZONE', 'Indian/Antananarivo')),
             'sslmode' => 'prefer',
             // Connexion persistante : chaque worker PHP-FPM garde sa connexion
             // ouverte entre deux requêtes (une nouvelle connexion coûte ~90 ms

@@ -5,7 +5,7 @@
 --                                     sauf mise en pause via voyage_is_active)
 --                             FALSE = planifié mais non publié : prévision de la
 --                                     compagnie, les clients ne le voient pas
---   voyage_publication_prevue instant (UTC) auquel un voyage non publié sera publié
+--   voyage_publication_prevue instant (heure de Madagascar) auquel un voyage non publié sera publié
 --                             automatiquement par la tâche `voyages:publier` ;
 --                             NULL = pas de date (publication manuelle)
 --
@@ -42,6 +42,6 @@ CREATE INDEX IF NOT EXISTS idx_voyages_publication_prevue
 COMMENT ON COLUMN fandrio_app.voyages.voyage_publie IS
     'TRUE : publié (visible des clients). FALSE : planifié mais non publié, invisible des clients (voyage_is_active = false)';
 COMMENT ON COLUMN fandrio_app.voyages.voyage_publication_prevue IS
-    'Instant (UTC) de publication automatique d''un voyage non publié ; NULL = publication manuelle';
+    'Instant (heure de Madagascar) de publication automatique d''un voyage non publié ; NULL = publication manuelle';
 
 COMMIT;

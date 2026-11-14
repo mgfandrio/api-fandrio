@@ -236,7 +236,7 @@ CREATE TABLE fandrio_app.voyages (
     CONSTRAINT voyages_active_statut_invariant
         CHECK (voyage_is_active = false OR voyage_statut IN (1, 2)),
     -- Publication : FALSE = planifié mais non publié (invisible des clients, donc toujours inactif).
-    -- voyage_publication_prevue : instant (UTC) de publication automatique, NULL = manuelle.
+    -- voyage_publication_prevue : instant (heure de Madagascar) de publication automatique, NULL = manuelle.
     voyage_publie BOOLEAN NOT NULL DEFAULT TRUE,
     voyage_publication_prevue TIMESTAMP NULL,
     CONSTRAINT voyages_non_publie_inactif

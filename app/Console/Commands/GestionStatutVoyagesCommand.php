@@ -77,7 +77,9 @@ class GestionStatutVoyagesCommand extends Command
                          ->where('voyage_heure_depart', '<=', $currentTime);
                   });
             })
-            ->where('places_reservees', '>=', self::SEUIL_RESERVATIONS)
+            // Assez de réservations, ou voiture déjà partie (embarquement clôturé)
+            ->where(fn($q) => $q->where('places_reservees', '>=', self::SEUIL_RESERVATIONS)
+                ->orWhereNotNull('voyage_suivi'))
             ->get();
 
         foreach ($voyagesTermines as $voyage) {
@@ -139,6 +141,7 @@ class GestionStatutVoyagesCommand extends Command
             })
             ->where('places_reservees', '>', 0)
             ->where('places_reservees', '<', self::SEUIL_RESERVATIONS)
+            ->whereNull('voyage_suivi') // une voiture partie n'est jamais annulée
             ->get();
 
         $clientsNotifies = 0;
@@ -197,6 +200,7 @@ class GestionStatutVoyagesCommand extends Command
                   });
             })
             ->where('places_reservees', 0)
+            ->whereNull('voyage_suivi')
             ->update([
                 'voyage_statut' => 4,
                 'voyage_is_active' => false,

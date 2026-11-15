@@ -73,10 +73,12 @@ class VoyageController extends Controller
                 // Publication : maintenant (défaut), plus_tard (planifié, non publié) ou programmée à publication_date
                 'publication' => 'sometimes|string|in:maintenant,plus_tard,programmee',
                 'publication_date' => 'required_if:publication,programmee|nullable|date',
+                // Compagnie partenaire de réception (située à destination) ; null = suivi interne
+                'comp_reception' => 'sometimes|nullable|integer',
             ]);
 
             $voyageDTO = VoyageDTO::fromRequest($request->all());
-            $voyage = $this->voyageService->programmerVoyage($voyageDTO, $this->publicationDemandee($request));
+            $voyage = $this->voyageService->programmerVoyage($voyageDTO, $this->publicationDemandee($request), $request->input('comp_reception'));
 
             return response()->json([
                 'statut' => true,
@@ -138,13 +140,17 @@ class VoyageController extends Controller
                 // Publication : maintenant (défaut), plus_tard (planifié, non publié) ou programmée à publication_date
                 'publication' => 'sometimes|string|in:maintenant,plus_tard,programmee',
                 'publication_date' => 'required_if:publication,programmee|nullable|date',
+                // Compagnie partenaire de réception (située à destination) ; null = suivi interne
+                'comp_reception' => 'sometimes|nullable|integer',
             ]);
 
             $voyageDTO = VoyageDTO::fromRequest($request->all());
             $voyage = $this->voyageService->mettreAJourVoyage(
                 $id,
                 $voyageDTO,
-                $request->has('publication') ? $this->publicationDemandee($request) : null
+                $request->has('publication') ? $this->publicationDemandee($request) : null,
+                $request->exists('comp_reception'),
+                $request->input('comp_reception')
             );
 
             return response()->json([
@@ -186,12 +192,15 @@ class VoyageController extends Controller
                 // Publication propre à un voyage (prioritaire sur celle du lot)
                 'voyages.*.publication' => 'sometimes|string|in:maintenant,plus_tard,programmee',
                 'voyages.*.publication_date' => 'nullable|date',
+                'voyages.*.comp_reception' => 'sometimes|nullable|integer',
                 // Publication : maintenant (défaut), plus_tard (planifié, non publié) ou programmée à publication_date
                 'publication' => 'sometimes|string|in:maintenant,plus_tard,programmee',
                 'publication_date' => 'required_if:publication,programmee|nullable|date',
+                // Compagnie partenaire de réception (située à destination) ; null = suivi interne
+                'comp_reception' => 'sometimes|nullable|integer',
             ]);
 
-            $resultat = $this->voyageService->programmerVoyagesMultiples($request->input('voyages'), $this->publicationDemandee($request));
+            $resultat = $this->voyageService->programmerVoyagesMultiples($request->input('voyages'), $this->publicationDemandee($request), $request->input('comp_reception'));
 
             return response()->json([
                 'statut' => true,

@@ -67,6 +67,27 @@ class NotificationService
         }
     }
 
+    /**
+     * Notifier tous les admins actifs d'une compagnie (suivi des voyages, partenariats…).
+     */
+    public static function notifierAdminsCompagnie(int $compId, int $type, string $titre, string $message, array $extra = []): void
+    {
+        $admins = Utilisateur::where('comp_id', $compId)
+            ->where('util_role', 2)
+            ->where('util_statut', 1)
+            ->pluck('util_id');
+
+        foreach ($admins as $utilId) {
+            self::envoyer([
+                'type' => $type,
+                'destinataire_type' => 2,
+                'destinataire_id' => $utilId,
+                'titre' => $titre,
+                'message' => $message,
+            ] + $extra);
+        }
+    }
+
     /** Rappel, répété dans les notifications client : le billet fonctionne sans internet. */
     public const PHRASE_BILLET_HORS_LIGNE = "Le jour du départ, montrez le QR code (FANDRIO > Billets) à l'agent de la compagnie : il fonctionne même sans internet.";
 

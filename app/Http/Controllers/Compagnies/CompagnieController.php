@@ -111,13 +111,25 @@ class CompagnieController extends Controller
                 'admin_prenom' => 'required|string|max:100',
                 'admin_email' => 'required|email|max:150',
                 'admin_telephone' => 'required|string|max:20',
-                'admin_mot_de_passe' => 'required|string|min:6'
+                'admin_mot_de_passe' => 'required|string|min:6',
+
+                // Compagnies partenaires (au moins une, sauf s'il n'existe encore aucune autre compagnie)
+                'partenaires' => (Compagnie::where('comp_statut', 1)->exists() ? 'required' : 'sometimes') . '|array' . (Compagnie::where('comp_statut', 1)->exists() ? '|min:1' : ''),
+                'partenaires.*' => 'integer|distinct|exists:compagnies,comp_id',
+            ], [
+                'partenaires.required' => 'Choisissez au moins une compagnie partenaire.',
+                'partenaires.min' => 'Choisissez au moins une compagnie partenaire.',
             ]);
 
             $compagnieDTO = CompagnieDTO::fromRequest($request->all());
             $adminDTO = AdminCompagnieDTO::fromRequest($request->all());
 
-            $resultat = $this->compagnieService->creerCompagnie($compagnieDTO, $adminDTO);
+            $resultat = \Illuminate\Support\Facades\DB::transaction(function () use ($compagnieDTO, $adminDTO, $request) {
+                $resultat = $this->compagnieService->creerCompagnie($compagnieDTO, $adminDTO);
+                app(\App\Services\Compagnies\PartenaireService::class)
+                    ->lierALaCreation((int) $resultat['compagnie']['id'], (array) $request->input('partenaires', []));
+                return $resultat;
+            });
 
             return response()->json([
                 'statut' => true,
@@ -147,6 +159,8 @@ class CompagnieController extends Controller
     {
         try {
             $compagnie = $this->compagnieService->getCompagnie($id);
+            // Compagnies partenaires (consultation par l'admin système)
+            $compagnie['partenaires'] = app(\App\Services\Compagnies\PartenaireService::class)->lister($id);
 
             return response()->json([
                 'statut' => true,

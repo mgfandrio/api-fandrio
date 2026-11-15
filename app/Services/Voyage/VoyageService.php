@@ -7,6 +7,7 @@ use App\Models\Trajet\Trajet;
 use App\Models\Voitures\Voitures;
 use App\Models\Reservation\Reservation;
 use App\Services\Notification\NotificationService;
+use App\Services\Compagnies\PartenaireService;
 use App\DTOs\VoyageDTO;
 use App\Helpers\DateFormatter;
 use Illuminate\Support\Facades\DB;
@@ -35,9 +36,9 @@ class VoyageService
     /**
      * Programmer un nouveau voyage.
      */
-    public function programmerVoyage(VoyageDTO $voyageDTO, array $publication = []): array 
+    public function programmerVoyage(VoyageDTO $voyageDTO, array $publication = [], $reception = null): array 
     {
-        return DB::transaction(function () use ($voyageDTO, $publication) {
+        return DB::transaction(function () use ($voyageDTO, $publication, $reception) {
             $compagnieId = $this->getCompagnieUtilisateur();
 
             // Valider le DTO
@@ -73,7 +74,9 @@ class VoyageService
                 'voit_id' => $voyageDTO->voitId,
                 'voyage_statut' => 1, // Programmé
                 'places_disponibles' => $voyageDTO->placesDisponibles,
-                'places_reservees' => 0
+                'places_reservees' => 0,
+                // Compagnie partenaire qui accueille la voiture à destination (null = suivi interne)
+                'comp_reception' => app(PartenaireService::class)->verifierReception($compagnieId, $reception, $trajet),
             ] + $this->champsPublication($publication, $voyageDTO->voyageDate, $voyageDTO->voyageHeureDepart));
 
             return $this->formaterVoyageComplet($voyage);
@@ -84,9 +87,9 @@ class VoyageService
     /**
      * Programmer plusieurs voyages en une seule opération.
      */
-    public function programmerVoyagesMultiples(array $voyagesData, array $publication = []): array
+    public function programmerVoyagesMultiples(array $voyagesData, array $publication = [], $receptionLot = null): array
     {
-        return DB::transaction(function () use ($voyagesData, $publication) {
+        return DB::transaction(function () use ($voyagesData, $publication, $receptionLot) {
             $compagnieId = $this->getCompagnieUtilisateur();
 
             $voyagesCrees = [];
@@ -133,6 +136,13 @@ class VoyageService
                         $this->assertCoherenceCategorie($trajetItem, $voiture);
                     }
 
+                    // Compagnie de réception propre à ce voyage si elle est fournie, sinon celle du lot
+                    $receptionId = app(PartenaireService::class)->verifierReception(
+                        $compagnieId,
+                        array_key_exists('comp_reception', $data) ? $data['comp_reception'] : $receptionLot,
+                        $trajetItem
+                    );
+
                     $voyage = Voyage::create([
                         'voyage_date' => $voyageDTO->voyageDate,
                         'voyage_heure_depart' => $voyageDTO->voyageHeureDepart,
@@ -142,6 +152,7 @@ class VoyageService
                         'voyage_statut' => 1,
                         'places_disponibles' => $voyageDTO->placesDisponibles,
                         'places_reservees' => 0,
+                        'comp_reception' => $receptionId,
                     ] + $this->champsPublication(
                         // Publication propre à ce voyage si elle est fournie, sinon celle du lot
                         isset($data['publication'])
@@ -291,7 +302,7 @@ class VoyageService
         $aujourdhui = now($fuseau)->toDateString();
         $limiteDepart = now($fuseau)->addDays($jours)->toDateString();
 
-        $base = fn() => Voyage::with(['trajet.provinceDepart', 'trajet.provinceArrivee', 'voiture.chauffeur'])
+        $base = fn() => Voyage::with(['trajet.provinceDepart', 'trajet.provinceArrivee', 'voiture.chauffeur', 'compagnieReception'])
             ->whereHas('trajet', fn($q) => $q->where('comp_id', $compagnieId))
             ->where('voyage_statut', 1)
             ->where('voyage_publie', false)
@@ -330,7 +341,7 @@ class VoyageService
         // Statuts (complet / départ atteint → En cours ; Terminé ; Annulé) mis à
         // jour par la tâche planifiée `voyages:gestion-statuts` (chaque minute).
 
-        $query = Voyage::with(['trajet.provinceDepart', 'trajet.provinceArrivee', 'voiture.chauffeur'])
+        $query = Voyage::with(['trajet.provinceDepart', 'trajet.provinceArrivee', 'voiture.chauffeur', 'compagnieReception'])
             ->whereHas('trajet', function($q) use ($compagnieId) {
                 $q->where('comp_id', $compagnieId);
             });
@@ -432,20 +443,37 @@ class VoyageService
     /**
      * Met à jour un voyage
      */
-    public function mettreAjourVoyage(int $voyageId, VoyageDTO $voyageDTO, ?array $publication = null): array 
+    public function mettreAjourVoyage(int $voyageId, VoyageDTO $voyageDTO, ?array $publication = null, bool $receptionFournie = false, $reception = null): array 
     {
-        return DB::transaction(function () use ($voyageId, $voyageDTO, $publication) {
+        return DB::transaction(function () use ($voyageId, $voyageDTO, $publication, $receptionFournie, $reception) {
             $compagnieId = $this->getCompagnieUtilisateur();
 
             $voyage = Voyage::whereHas('trajet', function($q) use ($compagnieId) {
                 $q->where('comp_id', $compagnieId);
             })->findOrFail($voyageId);
 
+            if ($voyage->voyage_suivi !== null) {
+                throw new \Exception('Cette voiture est déjà partie : le voyage ne peut plus être modifié.');
+            }
+
             // Valider le DTO
             $voyageDTO->validate();
 
             // Le trajet (nouveau ou inchangé) appartient à la compagnie
             $trajet = Trajet::where('comp_id', $compagnieId)->findOrFail($voyageDTO->trajId);
+
+            // Compagnie de réception : celle demandée, sinon l'actuelle si elle convient
+            // toujours à la destination (le trajet a pu changer), sinon aucune
+            $partenaires = app(PartenaireService::class);
+            if ($receptionFournie) {
+                $receptionId = $partenaires->verifierReception($compagnieId, $reception, $trajet);
+            } else {
+                try {
+                    $receptionId = $partenaires->verifierReception($compagnieId, $voyage->comp_reception, $trajet);
+                } catch (\Exception) {
+                    $receptionId = null;
+                }
+            }
 
             $voitureChangee = $voyageDTO->voitId != $voyage->voit_id;
             $dateChangee = $voyageDTO->voyageDate !== $voyage->voyage_date->toDateString();
@@ -499,7 +527,8 @@ class VoyageService
                 'voyage_type' => $voyageDTO->voyageType,
                 'traj_id' => $voyageDTO->trajId,
                 'voit_id' => $voyageDTO->voitId,
-                'places_disponibles' => $voyageDTO->placesDisponibles
+                'places_disponibles' => $voyageDTO->placesDisponibles,
+                'comp_reception' => $receptionId,
             ]
                 // La publication ne se règle que tant que le voyage n'est pas publié
                 + ($publication !== null && !$voyage->voyage_publie
@@ -541,6 +570,9 @@ class VoyageService
             }
             if ($voyage->voyage_statut === 3) {
                 throw new \Exception('Impossible d\'annuler un voyage terminé');
+            }
+            if ($voyage->voyage_suivi !== null) {
+                throw new \Exception('Cette voiture est déjà partie : le voyage ne peut plus être annulé.');
             }
 
             // 1. Récupérer les réservations actives avant changement (pour notifier les clients)
@@ -860,7 +892,18 @@ class VoyageService
                     'telephone' => $voyage->voiture->chauffeur->chauff_phone,
                 ] : null,
             ],
-            'categorie' => $voyage->voyage_categorie
+            'categorie' => $voyage->voyage_categorie,
+            // Compagnie partenaire qui accueille la voiture à destination (null = suivi interne)
+            'reception' => $voyage->compagnieReception ? [
+                'id' => $voyage->compagnieReception->comp_id,
+                'nom' => $voyage->compagnieReception->comp_nom,
+            ] : null,
+            // Suivi de la voiture : null (pas partie), 'en_route' ou 'arrive'
+            'suivi' => match ($voyage->voyage_suivi) {
+                Voyage::SUIVI_EN_ROUTE => 'en_route',
+                Voyage::SUIVI_ARRIVE => 'arrive',
+                default => null,
+            },
         ];
     }
 

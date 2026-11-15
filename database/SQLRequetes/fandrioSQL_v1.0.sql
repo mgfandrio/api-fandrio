@@ -197,6 +197,22 @@ CREATE TABLE fandrio_app.compagnie_provinces (
 
 
 -- =============================================================================
+-- 7bis. TABLE COMPAGNIE_PARTENAIRES (partenariats réciproques entre compagnies)
+-- =============================================================================
+-- Une ligne par paire (comp_a < comp_b). La compagnie partenaire située dans la
+-- province d'arrivée d'un voyage reçoit le suivi de la voiture en route.
+CREATE TABLE fandrio_app.compagnie_partenaires (
+    cp_id SERIAL PRIMARY KEY,
+    comp_a INTEGER NOT NULL REFERENCES fandrio_app.compagnies(comp_id) ON DELETE CASCADE,
+    comp_b INTEGER NOT NULL REFERENCES fandrio_app.compagnies(comp_id) ON DELETE CASCADE,
+    cp_cree_par INTEGER NULL REFERENCES fandrio_app.compagnies(comp_id) ON DELETE SET NULL, -- NULL = admin système
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT compagnie_partenaires_ordre CHECK (comp_a < comp_b),
+    CONSTRAINT compagnie_partenaires_unique UNIQUE (comp_a, comp_b)
+);
+
+
+-- =============================================================================
 -- 8. TABLE TRAJETS
 -- =============================================================================
 CREATE TABLE fandrio_app.trajets (
@@ -241,6 +257,16 @@ CREATE TABLE fandrio_app.voyages (
     voyage_publication_prevue TIMESTAMP NULL,
     CONSTRAINT voyages_non_publie_inactif
         CHECK (voyage_publie = true OR voyage_is_active = false),
+    -- Suivi de la voiture : compagnie de réception (partenaire à destination, NULL = suivi interne),
+    -- voyage_suivi NULL pas parti / 1 en route / 2 arrivé
+    comp_reception INTEGER NULL REFERENCES fandrio_app.compagnies(comp_id) ON DELETE SET NULL,
+    voyage_suivi SMALLINT NULL,
+    CONSTRAINT voyages_suivi_check CHECK (voyage_suivi IS NULL OR voyage_suivi IN (1, 2)),
+    voyage_depart_le TIMESTAMP NULL,
+    voyage_depart_auto BOOLEAN NOT NULL DEFAULT FALSE, -- embarquement non clôturé : en route automatique 1 h après le départ
+    voyage_arrivee_le TIMESTAMP NULL,
+    voyage_arrivee_par INTEGER NULL REFERENCES fandrio_app.compagnies(comp_id) ON DELETE SET NULL,
+    voyage_retard_notifie BOOLEAN NOT NULL DEFAULT FALSE,
     places_disponibles INTEGER NOT NULL,
     places_reservees INTEGER DEFAULT 0 CHECK (places_reservees >= 0),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -387,7 +413,7 @@ CREATE TABLE fandrio_app.factures (
 -- =============================================================================
 CREATE TABLE fandrio_app.notifications (
     notif_id SERIAL PRIMARY KEY,
-    notif_type INTEGER NOT NULL CHECK (notif_type IN (1, 2, 3, 4, 8, 9, 10, 11, 12)),
+    notif_type INTEGER NOT NULL CHECK (notif_type IN (1, 2, 3, 4, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17)),
     -- 1: confirmation réservation client
     -- 2: rappel voyage (J-1, J-0)
     -- 3: annulation
@@ -397,6 +423,11 @@ CREATE TABLE fandrio_app.notifications (
     -- 10: voyage annulé automatiquement < 5 réservations (admin compagnie)
     -- 11: avertissement risque d'annulation J-1 (admin compagnie)
     -- 12: paiement validé par la compagnie (client)
+    -- 13: voyage en route vers la compagnie de réception
+    -- 14: voyage arrivé à destination (compagnie de départ)
+    -- 15: retard d'un voyage en route (les deux compagnies)
+    -- 16: départ automatique, embarquement non clôturé (compagnie de départ)
+    -- 17: partenariat ajouté ou retiré
     notif_destinataire_type INTEGER NOT NULL CHECK (notif_destinataire_type IN (1, 2, 3)), -- 1: utilisateur, 2: compagnie, 3: admin
     notif_destinataire_id INTEGER NOT NULL,
     notif_titre VARCHAR(200) NOT NULL,
@@ -581,6 +612,9 @@ CREATE INDEX idx_voyages_statut_date ON fandrio_app.voyages(voyage_statut, voyag
 CREATE INDEX idx_voyages_trajet ON fandrio_app.voyages(traj_id);
 -- Disponibilité d'un véhicule à une date
 CREATE INDEX idx_voyages_voiture ON fandrio_app.voyages(voit_id);
+CREATE INDEX idx_voyages_suivi ON fandrio_app.voyages(voyage_suivi) WHERE voyage_suivi IS NOT NULL;
+CREATE INDEX idx_voyages_comp_reception ON fandrio_app.voyages(comp_reception) WHERE comp_reception IS NOT NULL;
+CREATE INDEX idx_compagnie_partenaires_b ON fandrio_app.compagnie_partenaires(comp_b);
 -- Voyages planifiés à publier automatiquement (tâche voyages:publier, chaque minute)
 CREATE INDEX idx_voyages_publication_prevue ON fandrio_app.voyages(voyage_publication_prevue)
     WHERE voyage_publie = false AND voyage_publication_prevue IS NOT NULL;

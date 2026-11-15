@@ -24,6 +24,7 @@ use App\Http\Controllers\Client\DisponibiliteController;
 use App\Http\Controllers\Voiture\SiegeController;
 use App\Http\Controllers\Voiture\PlanSiegeController;
 use App\Http\Controllers\AdminCompagnie\ReservationAdminController;
+use App\Http\Controllers\AdminCompagnie\SuiviVoyageController;
 use App\Http\Controllers\AdminCompagnie\RemboursementController;
 use App\Http\Controllers\AdminCompagnie\CommissionPaiementController;
 use App\Http\Controllers\Webhook\PapiWebhookController;
@@ -318,6 +319,24 @@ Route::middleware(['api.key', 'auth:api', 'role:2'])->prefix('adminCompagnie')->
     // Paiement en ligne des commissions (collectes) via PAPI
     Route::prefix('commissions')->group(function () {
         Route::post('/collectes/{collecteId}/payer', [CommissionPaiementController::class, 'payer']);
+    });
+
+    // Compagnies partenaires (réception des voitures à destination)
+    Route::prefix('partenaires')->group(function () {
+        Route::get('/', [SuiviVoyageController::class, 'partenaires']);
+        Route::get('/disponibles', [SuiviVoyageController::class, 'disponibles']);
+        Route::get('/destination/{provinceId}', [SuiviVoyageController::class, 'pourDestination'])->whereNumber('provinceId');
+        Route::post('/', [SuiviVoyageController::class, 'ajouter']);
+        Route::delete('/{compId}', [SuiviVoyageController::class, 'retirer'])->whereNumber('compId');
+    });
+
+    // Suivi des voitures en route
+    Route::prefix('suivi')->group(function () {
+        Route::get('/', [SuiviVoyageController::class, 'index']);
+        Route::get('/compteurs', [SuiviVoyageController::class, 'compteurs']);
+        Route::get('/{id}', [SuiviVoyageController::class, 'show'])->whereNumber('id');
+        Route::post('/{id}/cloturer', [SuiviVoyageController::class, 'cloturer'])->whereNumber('id');
+        Route::post('/{id}/arrive', [SuiviVoyageController::class, 'arrive'])->whereNumber('id');
     });
 
     // Gestion des remboursements clients

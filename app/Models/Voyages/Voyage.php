@@ -32,6 +32,14 @@ class Voyage extends Model
         'voyage_is_active',
         'voyage_publie',
         'voyage_publication_prevue',
+        // Suivi de la voiture (en route / arrivé)
+        'comp_reception',
+        'voyage_suivi',
+        'voyage_depart_le',
+        'voyage_depart_auto',
+        'voyage_arrivee_le',
+        'voyage_arrivee_par',
+        'voyage_retard_notifie',
         'places_disponibles',
         'places_reservees'
     ];
@@ -42,6 +50,13 @@ class Voyage extends Model
         'voyage_is_active' => 'boolean',
         'voyage_publie' => 'boolean',
         'voyage_publication_prevue' => 'datetime',
+        'comp_reception' => 'integer',
+        'voyage_suivi' => 'integer',
+        'voyage_depart_le' => 'datetime',
+        'voyage_depart_auto' => 'boolean',
+        'voyage_arrivee_le' => 'datetime',
+        'voyage_arrivee_par' => 'integer',
+        'voyage_retard_notifie' => 'boolean',
         'places_disponibles' => 'integer',
         'places_reservees' => 'integer',
         'created_at' => 'datetime',
@@ -62,6 +77,15 @@ class Voyage extends Model
     public function voiture() {
         return $this->belongsTo(Voitures::class, 'voit_id', 'voit_id');
     }
+
+    /** Compagnie partenaire qui accueille la voiture à destination (null = suivi interne). */
+    public function compagnieReception() {
+        return $this->belongsTo(\App\Models\Compagnies\Compagnie::class, 'comp_reception', 'comp_id');
+    }
+
+    /** Suivi de la voiture : null = pas encore partie. */
+    public const SUIVI_EN_ROUTE = 1;
+    public const SUIVI_ARRIVE = 2;
 
     /**
      * Relation avec les réservations

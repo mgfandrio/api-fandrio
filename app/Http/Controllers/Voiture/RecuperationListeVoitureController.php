@@ -16,16 +16,10 @@ class RecuperationListeVoitureController extends Controller
             ->where('comp_id', $compagnieId)
             ->get();
 
-        if ($voitures->isEmpty()) {
-            return response()->json([
-                'statut' => false,
-                'message' => 'Aucune voiture trouvee'
-            ], 404);
-        }
-
+        // Liste vide = compagnie sans véhicule (nouvelle compagnie) : ce n'est pas une erreur
         return response()->json([
             'statut' => true,
-            'message' => 'Liste des voitures recuperee avec succes',
+            'message' => $voitures->isEmpty() ? 'Aucune voiture enregistree' : 'Liste des voitures recuperee avec succes',
             'data' => $voitures
         ], 200);
     }

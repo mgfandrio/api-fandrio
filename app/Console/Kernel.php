@@ -29,6 +29,10 @@ class Kernel extends ConsoleKernel
         // aussi autoCompleterVoyages(), anciennement exécuté à chaque GET admin)
         $schedule->command('voyages:gestion-statuts')->everyMinute()->withoutOverlapping();
 
+        // Suivi des voitures en route : départ automatique si l'embarquement n'est pas
+        // clôturé 1 h après l'heure de départ, alertes de retard
+        $schedule->command('voyages:suivi')->everyMinute()->withoutOverlapping();
+
         // Rappels de voyage : J-2, J-1, J-0 (dédup par jour) + avertissement clients 8h avant
         // (toutes les heures pour couvrir les voyages partant à n'importe quelle heure)
         $schedule->command('voyages:rappels')->hourly();

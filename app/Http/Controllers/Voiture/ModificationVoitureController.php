@@ -17,11 +17,12 @@ class ModificationVoitureController extends Controller
     {
         try {
             // Validation des données
+            // La compagnie ne se modifie pas : celle de l'admin connecté
+            $request->merge(['comp_id' => $request->user()->comp_id]);
             $validationDesDonnees = $request->validate(VoitureDTO::validationDonneesAmodifier($id));
 
-            // Modification via service
-            $voitureDTO = VoitureDTO::creationObjetAmodifier($validationDesDonnees);
-            $voiture = $voitureService->modifierVoiture($id, $voitureDTO);
+            // Modification des seuls champs envoyés (la compagnie ne change jamais)
+            $voiture = $voitureService->modifierVoiture($id, $validationDesDonnees);
 
             return response()->json([
                 'statut'  => true,

@@ -29,11 +29,12 @@ class ModificationChauffeurController extends Controller
 
         try {
 
+            // La compagnie ne se modifie pas : celle de l'admin connecté
+            $request->merge(['comp_id' => $request->user()->comp_id]);
             $validationDesDonnees = $request->validate(ChauffeurDTO::validationDonneesAmodifier($idChauffeur));
 
-            // Modification d' un chauffeur via un service
-            $chauffeurDTO = ChauffeurDTO::creationObjetAmodifier($validationDesDonnees, $chauffeur->chauff_cin);
-            $chauffeurModifie = $chauffeurService->modifierChauffeur($idChauffeur, $chauffeurDTO, $request->chauff_photo);
+            // Modification des seuls champs envoyés (la compagnie ne change jamais)
+            $chauffeurModifie = $chauffeurService->modifierChauffeur($idChauffeur, $validationDesDonnees, $request->file('chauff_photo'));
 
             $retourMessage .= ' a bien ete effectuee avec succes';
 

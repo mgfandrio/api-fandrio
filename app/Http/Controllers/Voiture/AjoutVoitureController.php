@@ -14,6 +14,8 @@ class AjoutVoitureController extends Controller
     public function ajouterVoiture(Request $request, VoitureService $voitureService): JsonResponse
     {
         try {
+            // La compagnie est toujours celle de l'admin connecté
+            $request->merge(['comp_id' => $request->user()->comp_id]);
 
             $validationDesDonnees = $request->validate(VoitureDTO::validationDonnees());
 

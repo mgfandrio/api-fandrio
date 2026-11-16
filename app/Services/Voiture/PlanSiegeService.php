@@ -262,9 +262,9 @@ class PlanSiegeService
         // Lecture unique (has() puis get() : null si invalidé entre les deux)
 
         if (is_array($enCache = Cache::get($cacheKey))) {
-
+            // Même en cache, le plan n'est servi qu'à la compagnie du véhicule
+            $this->verifierVoitureAppartientCompagnie((int) ($enCache['voiture']['id'] ?? 0));
             return $enCache;
-
         }
 
         $plan = PlanSiege::findOrFail($planId);

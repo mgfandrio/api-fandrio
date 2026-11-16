@@ -5,16 +5,42 @@ namespace App\Services\Voiture;
 use App\DTOs\VoitureDTO;
 use App\Models\Compagnies\Compagnie;
 use App\Models\Voitures\Voitures;
+use App\Models\Chauffeurs\Chauffeurs;
+use Illuminate\Support\Facades\Auth;
 
 class VoitureService
 {
     public function __construct(private PlanSiegeService $planSiegeService) {}
 
+    /** Champs qu'une modification peut changer (jamais la compagnie). */
+    private const CHAMPS_MODIFIABLES = ['voit_matricule', 'voit_marque', 'voit_modele', 'voit_places', 'voit_statut', 'chauff_id', 'voit_categorie'];
+
+    private function compagnieId(): int
+    {
+        $compId = (int) (Auth::user()?->comp_id);
+        if (!$compId) {
+            throw new \Exception('Utilisateur non associé à une compagnie');
+        }
+        return $compId;
+    }
+
+    /** Le chauffeur affecté doit appartenir à la même compagnie que le véhicule. */
+    private function assertChauffeurDeLaCompagnie(?int $chauffId, int $compId): void
+    {
+        if ($chauffId && !Chauffeurs::where('comp_id', $compId)->whereKey($chauffId)->exists()) {
+            throw new \Exception("Ce chauffeur n'appartient pas à votre compagnie.");
+        }
+    }
+
     public function ajouterVoiture(VoitureDTO $voitureDto): Voitures
     {
-        $this->assertCategorieAutorisee($voitureDto->comp_id, $voitureDto->voit_categorie);
+        // La compagnie est celle de l'admin connecté, quelle que soit la requête
+        $compId = $this->compagnieId();
+        $this->assertCategorieAutorisee($compId, $voitureDto->voit_categorie);
+        $this->assertChauffeurDeLaCompagnie($voitureDto->chauff_id, $compId);
 
         $donneesVoiture = $voitureDto->convertionDonneesEnTableau();
+        $donneesVoiture['comp_id'] = $compId;
 
         $voiture = Voitures::create($donneesVoiture);
 
@@ -32,21 +58,25 @@ class VoitureService
 
     public function trouverUneVoiture(int $idVoiture): ?Voitures
     {
-        return Voitures::find($idVoiture);
+        return Voitures::where('comp_id', $this->compagnieId())->find($idVoiture);
     }
 
-    public function modifierVoiture(int $idVoiture, VoitureDTO $voitureDto): Voitures
+    /**
+     * Modifie les champs envoyés (validés), et eux seuls.
+     */
+    public function modifierVoiture(int $idVoiture, array $donneesValidees): Voitures
     {
-        $voiture = Voitures::findOrFail($idVoiture);
+        $voiture = Voitures::where('comp_id', $this->compagnieId())->findOrFail($idVoiture);
         $anciennesPlaces = $voiture->voit_places;
         $ancienneCategorie = $voiture->voit_categorie ?? 'classique';
 
-        $this->assertCategorieAutorisee(
-            $voitureDto->comp_id ?: $voiture->comp_id,
-            $voitureDto->voit_categorie
-        );
+        $donneesUpdate = array_intersect_key($donneesValidees, array_flip(self::CHAMPS_MODIFIABLES));
 
-        $donneesUpdate = $voitureDto->convertionDonneesEnTableau();
+        $this->assertCategorieAutorisee((int) $voiture->comp_id, $donneesUpdate['voit_categorie'] ?? $ancienneCategorie);
+        if (array_key_exists('chauff_id', $donneesUpdate)) {
+            $this->assertChauffeurDeLaCompagnie((int) $donneesUpdate['chauff_id'], (int) $voiture->comp_id);
+        }
+
         $voiture->update($donneesUpdate);
 
         // Si le nombre de places ou la catégorie a changé, on regénère le plan automatiquement

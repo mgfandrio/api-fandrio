@@ -9,8 +9,7 @@ class ConsulterDetailsChauffeurController extends Controller
 {
     public function detailChauffeur(int $idChauffeur)
     {
-        $chauffeurService = new ChauffeurService();
-        $chauffeur = $chauffeurService->trouverUnChauffeur($idChauffeur);
+        $chauffeur = app(ChauffeurService::class)->trouverUnChauffeur($idChauffeur);
 
         if (!$chauffeur) {
             return response()->json([

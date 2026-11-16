@@ -80,6 +80,9 @@ return [
     | Fuseau dans lequel les compagnies saisissent la date et l'heure de départ
     | des voyages (colonnes voyage_date / voyage_heure_depart, sans fuseau).
     */
+    // Proxys de confiance (nginx, répartiteur de charge) : cf. App\Http\Middleware\TrustProxies
+    'trusted_proxies' => env('TRUSTED_PROXIES', '127.0.0.1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16'),
+
     'fuseau_voyages' => env('FUSEAU_VOYAGES', env('APP_TIMEZONE', 'Indian/Antananarivo')),
 
     /*

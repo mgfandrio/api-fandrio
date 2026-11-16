@@ -1,0 +1,65 @@
+# =============================================================================
+# FANDRIO API — PgBouncer devant PostgreSQL (un seul serveur)
+# =============================================================================
+# Fichier complémentaire, PAS ACTIVÉ par défaut. Il fait passer toutes les
+# connexions de l'API par PgBouncer, comme en multi-serveurs : à essayer sur
+# la préprod avant la bascule (cf. deploy/multi-serveurs/GUIDE_BASCULE.md).
+#
+#   docker compose -f docker-compose.prod.yml -f docker-compose.octane.yml \
+#                  -f docker-compose.pgbouncer.yml up -d --build
+#
+# Retour sans PgBouncer : relancer la même commande SANS ce fichier.
+#
+# Prérequis (base existante) : search_path et fuseau horaire posés sur le rôle,
+# cf. docker/postgres/init/02-parametres-role.sh (fait automatiquement sur une
+# base neuve).
+# =============================================================================
+
+x-via-pgbouncer: &via-pgbouncer
+  DB_HOST: pgbouncer
+  DB_PORT: 6432
+
+services:
+  pgbouncer:
+    build:
+      context: ./docker/pgbouncer
+    image: fandrio-pgbouncer:latest
+    container_name: fandrio_pgbouncer
+    restart: unless-stopped
+    environment:
+      PG_HOST: postgres
+      PG_PORT: 5432
+      DB_DATABASE: ${DB_DATABASE:-fandrio}
+      DB_USERNAME: ${DB_USERNAME:-fandrio}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD doit être défini}
+      PGBOUNCER_POOL_SIZE: ${PGBOUNCER_POOL_SIZE:-40}
+      PGBOUNCER_MAX_CLIENT_CONN: ${PGBOUNCER_MAX_CLIENT_CONN:-2000}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 6432"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - fandrio
+
+  app:
+    environment:
+      <<: *via-pgbouncer
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+
+  reverb:
+    environment:
+      <<: *via-pgbouncer
+
+  scheduler:
+    environment:
+      <<: *via-pgbouncer
+
+  queue:
+    environment:
+      <<: *via-pgbouncer

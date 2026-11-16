@@ -24,3 +24,7 @@ yarn.lock
 /.fleet
 /.idea
 /.vscode
+
+# Variables des serveurs en multi-serveurs (secrets)
+/deploy/multi-serveurs/.env.api
+/deploy/multi-serveurs/.env.donnees

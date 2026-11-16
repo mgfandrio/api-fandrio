@@ -1,0 +1,132 @@
+# =============================================================================
+# FANDRIO — SERVEUR API (multi-serveurs) : nginx, Octane, Reverb, files
+# =============================================================================
+# PRÉPARÉ, PAS ACTIVÉ. Identique sur chaque serveur API, lancé depuis la racine
+# du dépôt :
+#   docker compose --env-file deploy/multi-serveurs/.env.api \
+#     -f deploy/multi-serveurs/docker-compose.api.yml up -d --build
+#
+# Sur UN SEUL serveur API, ajouter le planificateur (tâches chaque minute) :
+#   COMPOSE_PROFILES=planificateur dans son .env.api
+# (onOneServer protège quand même d'une double exécution.)
+#
+# Les serveurs API ne gardent aucun état : base et Redis sont sur le serveur de
+# données. nginx (80) et Reverb (8080) n'écoutent que sur l'IP privée : seul le
+# répartiteur de charge les joint.
+# Guide complet : deploy/multi-serveurs/GUIDE_BASCULE.md
+# =============================================================================
+
+x-app-env: &app-env
+  APP_ENV: production
+  APP_DEBUG: "false"
+  LOG_CHANNEL: daily
+  LOG_LEVEL: ${LOG_LEVEL:-warning}
+  # Base : via PgBouncer du serveur de données
+  DB_HOST: ${IP_DONNEES:?IP_DONNEES doit être définie}
+  DB_PORT: 6432
+  DB_PERSISTENT: "true"
+  # Redis partagé
+  REDIS_HOST: ${IP_DONNEES}
+  REDIS_PORT: 6379
+  REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD doit être défini}
+  CACHE_DRIVER: redis
+  QUEUE_CONNECTION: redis
+  # Reverb : l'API publie sur le Reverb de son serveur ; les Reverb des
+  # différents serveurs se relaient les messages par Redis.
+  BROADCAST_DRIVER: reverb
+  REVERB_HOST: reverb
+  REVERB_PORT: 8080
+  REVERB_SCHEME: http
+  REVERB_SCALING_ENABLED: "true"
+  # REVERB_APP_ID / KEY / SECRET : lus dans le .env principal (env_file), identiques partout
+  # Proxys de confiance : nginx du conteneur et répartiteur de charge (réseau privé)
+  TRUSTED_PROXIES: ${TRUSTED_PROXIES:-127.0.0.1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}
+  OCTANE_SERVER: swoole
+  OCTANE_WORKERS: ${OCTANE_WORKERS:-auto}
+  OCTANE_MAX_REQUESTS: ${OCTANE_MAX_REQUESTS:-5000}
+
+x-app-base: &app-base
+  build:
+    context: ../..
+    dockerfile: Dockerfile
+    target: app
+  image: fandrio-api:latest
+  restart: unless-stopped
+  working_dir: /var/www
+  env_file:
+    - ../../.env
+  environment:
+    <<: *app-env
+  volumes:
+    # Logs de ce serveur uniquement (aucun fichier partagé n'y est stocké :
+    # logos et photos sont sur Cloudinary)
+    - storage:/var/www/storage
+  networks:
+    - fandrio
+
+services:
+  app:
+    <<: *app-base
+    container_name: fandrio_app
+    command:
+      - sh
+      - -c
+      - >-
+        exec php artisan octane:start
+        --server=swoole
+        --host=0.0.0.0
+        --port=8000
+        --workers=$${OCTANE_WORKERS:-auto}
+        --task-workers=0
+        --max-requests=$${OCTANE_MAX_REQUESTS:-5000}
+    volumes:
+      - storage:/var/www/storage
+      - ../../docker/php/octane.ini:/usr/local/etc/php/conf.d/zz-octane.ini:ro
+    healthcheck:
+      test: ["CMD-SHELL", "php -r \"exit(@file_get_contents('http://127.0.0.1:8000/up') === false ? 1 : 0);\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  nginx:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+      target: web
+    image: fandrio-web:latest
+    container_name: fandrio_nginx
+    restart: unless-stopped
+    ports:
+      - "${IP_PRIVEE:?IP_PRIVEE doit être définie}:80:80"
+    volumes:
+      - ../../docker/nginx/octane.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - app
+    networks:
+      - fandrio
+
+  reverb:
+    <<: *app-base
+    container_name: fandrio_reverb
+    command: ["php", "artisan", "reverb:start", "--host=0.0.0.0", "--port=8080"]
+    ports:
+      - "${IP_PRIVEE}:8080:8080"
+
+  queue:
+    <<: *app-base
+    container_name: fandrio_queue
+    command: ["php", "artisan", "queue:work", "redis", "--tries=3", "--timeout=60", "--sleep=1", "--max-time=3600"]
+
+  # Sur un seul serveur API (COMPOSE_PROFILES=planificateur)
+  scheduler:
+    <<: *app-base
+    container_name: fandrio_scheduler
+    command: ["php", "artisan", "schedule:work"]
+    profiles: ["planificateur"]
+
+volumes:
+  storage:
+
+networks:
+  fandrio:
+    driver: bridge

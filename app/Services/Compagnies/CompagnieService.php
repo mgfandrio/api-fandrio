@@ -145,7 +145,7 @@ class CompagnieService
             ->count();
         
         $voituresIndisponibles = Voitures::where('comp_id', $compagnieId)
-            ->where('voit_statut', 0)
+            ->where('voit_statut', 2) // 2 = indisponible (3 = supprimé)
             ->count();
 
         $voituresTotal = $voituresDisponibles + $voituresIndisponibles;

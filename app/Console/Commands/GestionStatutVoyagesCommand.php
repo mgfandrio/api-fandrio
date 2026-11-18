@@ -172,6 +172,7 @@ class GestionStatutVoyagesCommand extends Command
                     'res_statut' => 4,
                     'res_remb_statut' => $aPaye ? 1 : 0, // 1 = en attente si paiement reçu
                     'res_remb_montant' => $aPaye ? $reservation->montant_avance : null,
+                    'res_remb_motif' => $aPaye ? Reservation::REMB_VOYAGE_ANNULE : null,
                 ]);
                 NotificationService::notifierClientVoyageAnnule(
                     $reservation->util_id,

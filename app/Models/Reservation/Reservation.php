@@ -33,6 +33,7 @@ class Reservation extends Model
         'res_remb_date',
         'res_remb_reference',
         'res_remb_note',
+        'res_remb_motif',
         'res_commission',
         'res_commission_taux',
         'coll_id',
@@ -42,6 +43,10 @@ class Reservation extends Model
     /** Canal de vente (res_canal) */
     public const CANAL_EN_LIGNE = 1;
     public const CANAL_GUICHET = 2;
+
+    /** Motif du remboursement (res_remb_motif) */
+    public const REMB_VOYAGE_ANNULE = 1;
+    public const REMB_PAIEMENT_TARDIF = 2;
 
     /**
      * Signature du QR code du billet (HMAC avec la clé de l'application) :
@@ -64,6 +69,7 @@ class Reservation extends Model
         'res_statut' => 'integer',
         'nb_voyageurs' => 'integer',
         'res_remb_statut' => 'integer',
+        'res_remb_motif' => 'integer',
         'res_remb_montant' => 'decimal:2',
         'res_remb_date' => 'datetime',
         'res_commission' => 'decimal:2',

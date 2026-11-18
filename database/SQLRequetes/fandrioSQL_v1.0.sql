@@ -335,6 +335,8 @@ CREATE TABLE fandrio_app.reservations (
     res_remb_date TIMESTAMP NULL,
     res_remb_reference VARCHAR(100) NULL,
     res_remb_note TEXT NULL,
+    -- Motif : 1 voyage annulé, 2 paiement arrivé trop tard (fixé à la création du remboursement)
+    res_remb_motif SMALLINT NULL CONSTRAINT reservations_res_remb_motif_check CHECK (res_remb_motif IS NULL OR res_remb_motif IN (1, 2)),
     -- Commission FIGÉE par billet (au passage du voyage en "Terminé") + rattachement à la collecte
     res_commission DECIMAL(10,2) NULL,
     res_commission_taux DECIMAL(5,2) NULL,
@@ -352,6 +354,7 @@ COMMENT ON COLUMN fandrio_app.reservations.numero_paiement IS 'Numéro de télé
 COMMENT ON COLUMN fandrio_app.reservations.date_annulation_possible IS '3 jours avant le voyage';
 COMMENT ON COLUMN fandrio_app.reservations.res_remb_statut IS '0=Non applicable, 1=En attente, 2=Traité, 3=Refusé';
 COMMENT ON COLUMN fandrio_app.reservations.res_remb_montant IS 'Montant à rembourser (généralement égal à montant_avance payé)';
+COMMENT ON COLUMN fandrio_app.reservations.res_remb_motif IS 'Motif du remboursement : 1=Voyage annulé, 2=Paiement arrivé trop tard (NULL si aucun remboursement)';
 COMMENT ON COLUMN fandrio_app.reservations.res_remb_date IS 'Date de traitement effectif du remboursement par la compagnie';
 COMMENT ON COLUMN fandrio_app.reservations.res_remb_reference IS 'Référence de la transaction de remboursement (numéro mobile money, etc.)';
 COMMENT ON COLUMN fandrio_app.reservations.res_remb_note IS 'Note libre de la compagnie (ex: motif de refus)';

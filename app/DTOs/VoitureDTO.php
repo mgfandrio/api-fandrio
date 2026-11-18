@@ -42,7 +42,7 @@ class VoitureDTO
             voit_marque: $donnees['voit_marque'] ?? '',
             voit_modele: $donnees['voit_modele'] ?? '',
             voit_places: isset($donnees['voit_places']) ? (int) $donnees['voit_places'] : 0,
-            voit_statut: isset($donnees['voit_statut']) ? (int) $donnees['voit_statut'] : 0,
+            voit_statut: isset($donnees['voit_statut']) ? (int) $donnees['voit_statut'] : 1,
             comp_id: isset($donnees['comp_id']) ? (int) $donnees['comp_id'] : 0,
             chauff_id: isset($donnees['chauff_id']) ? (int) $donnees['chauff_id'] : 0,
             voit_categorie: $donnees['voit_categorie'] ?? 'classique'
@@ -58,7 +58,7 @@ class VoitureDTO
             'voit_marque' => 'required|string|max:100',
             'voit_modele' => 'required|string|max:100',
             'voit_places'    => 'required|integer',
-            'voit_statut' => 'required|integer',
+            'voit_statut' => 'required|integer|in:1,2', // 1 disponible, 2 indisponible (3 = supprimé, via la suppression)
             'comp_id'       => 'required|integer|exists:compagnies,comp_id',
             'chauff_id'       => 'required|integer|exists:chauffeurs,chauff_id',
             'voit_categorie' => 'sometimes|string|in:classique,vip,premium'
@@ -74,7 +74,7 @@ class VoitureDTO
             'voit_marque' => 'sometimes|required|string|max:100',
             'voit_modele' => 'sometimes|required|string|max:100',
             'voit_places'    => 'sometimes|required|integer',
-            'voit_statut' => 'sometimes|required|integer',
+            'voit_statut' => 'sometimes|required|integer|in:1,2',
             'comp_id'       => 'sometimes|required|integer|exists:compagnies,comp_id',
             'chauff_id'       => 'sometimes|required|integer|exists:chauffeurs,chauff_id',
             'voit_categorie' => 'sometimes|string|in:classique,vip,premium'

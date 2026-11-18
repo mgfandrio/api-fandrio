@@ -587,6 +587,7 @@ class VoyageService
                     'res_statut' => 4,
                     'res_remb_statut' => $aPaye ? 1 : 0,
                     'res_remb_montant' => $aPaye ? $resa->montant_avance : null,
+                    'res_remb_motif' => $aPaye ? Reservation::REMB_VOYAGE_ANNULE : null,
                 ]);
             }
 

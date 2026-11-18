@@ -104,6 +104,7 @@ class ReservationPaiementService
                     'montant_restant' => 0,
                     'res_remb_statut' => 1, // remboursement en attente
                     'res_remb_montant' => $reservation->montant_total,
+                    'res_remb_motif'  => Reservation::REMB_PAIEMENT_TARDIF,
                     'date_limite_paiement' => null,
                 ]);
 

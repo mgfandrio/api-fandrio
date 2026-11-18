@@ -102,7 +102,12 @@ class RemboursementController extends Controller
                     'reference' => $r->res_remb_reference,
                     'note' => $r->res_remb_note,
                     // Pourquoi rembourser : voyage annulé par la compagnie, ou paiement arrivé après le délai
-                    'motif' => (int) ($r->voyage?->voyage_statut) === 4 ? 'voyage_annule' : 'paiement_tardif',
+                    // (motif enregistré à la création ; repli sur l'état du voyage pour les anciennes lignes)
+                    'motif' => match ((int) $r->res_remb_motif) {
+                        Reservation::REMB_VOYAGE_ANNULE => 'voyage_annule',
+                        Reservation::REMB_PAIEMENT_TARDIF => 'paiement_tardif',
+                        default => (int) ($r->voyage?->voyage_statut) === 4 ? 'voyage_annule' : 'paiement_tardif',
+                    },
                     // Où renvoyer l'argent : moyen et numéro utilisés pour payer
                     'paiement' => [
                         'type' => $r->type_paie_id ? ($typesPaiement[$r->type_paie_id] ?? null) : null,

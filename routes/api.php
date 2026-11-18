@@ -27,6 +27,7 @@ use App\Http\Controllers\AdminCompagnie\ReservationAdminController;
 use App\Http\Controllers\AdminCompagnie\SuiviVoyageController;
 use App\Http\Controllers\AdminCompagnie\RemboursementController;
 use App\Http\Controllers\AdminCompagnie\ChiffreAffairesController;
+use App\Http\Controllers\AdminCompagnie\CaisseController;
 use App\Http\Controllers\AdminCompagnie\CommissionPaiementController;
 use App\Http\Controllers\Webhook\PapiWebhookController;
 use App\Http\Controllers\Notification\NotificationController;
@@ -320,6 +321,11 @@ Route::middleware(['api.key', 'auth:api', 'role:2'])->prefix('adminCompagnie')->
     // Chiffre d'affaires sur période libre (+ détail pour l'export Excel)
     Route::get('/chiffre-affaires', [ChiffreAffairesController::class, 'resume']);
     Route::get('/chiffre-affaires/ventes', [ChiffreAffairesController::class, 'ventes']);
+
+    // Caisse du guichet : espèces par vendeur et clôture du soir
+    Route::get('/caisse', [CaisseController::class, 'jour']);
+    Route::get('/caisse/ventes', [CaisseController::class, 'ventes']);
+    Route::post('/caisse/cloturer', [CaisseController::class, 'cloturer']);
 
     // Paiement en ligne des commissions (collectes) via PAPI
     Route::prefix('commissions')->group(function () {

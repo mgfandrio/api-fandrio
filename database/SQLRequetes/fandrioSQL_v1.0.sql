@@ -564,6 +564,32 @@ CREATE TABLE fandrio_app.failed_jobs (
 
 
 -- =============================================================================
+-- 23. TABLE CAISSE_CLOTURES (Clôture du soir de la caisse du guichet)
+-- =============================================================================
+-- Une ligne par vendeur et par jour. Une vente après la clôture rend la caisse
+-- « à reclôturer » : la nouvelle clôture remplace la précédente.
+CREATE TABLE fandrio_app.caisse_clotures (
+    clot_id SERIAL PRIMARY KEY,
+    comp_id INTEGER NOT NULL REFERENCES fandrio_app.compagnies(comp_id) ON DELETE CASCADE,
+    vendeur_id INTEGER NOT NULL REFERENCES fandrio_app.utilisateurs(util_id) ON DELETE CASCADE,
+    clot_date DATE NOT NULL,
+    clot_attendu DECIMAL(12,2) NOT NULL CHECK (clot_attendu >= 0),
+    clot_compte DECIMAL(12,2) NOT NULL CHECK (clot_compte >= 0),
+    clot_ecart DECIMAL(12,2) NOT NULL, -- compté − attendu (négatif = il manque de l'argent)
+    clot_nb_ventes INTEGER NOT NULL DEFAULT 0,
+    clot_nb_billets INTEGER NOT NULL DEFAULT 0,
+    clot_billetage JSONB NULL, -- comptage facultatif : {"20000": 8, "10000": 6, ...}
+    clot_note TEXT NULL,
+    clot_par INTEGER NULL REFERENCES fandrio_app.utilisateurs(util_id) ON DELETE SET NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT caisse_clotures_unique UNIQUE (comp_id, vendeur_id, clot_date)
+);
+
+COMMENT ON TABLE fandrio_app.caisse_clotures IS 'Clôtures de caisse du guichet : une par vendeur et par jour (attendu, compté, écart)';
+
+
+-- =============================================================================
 -- INDEX POUR OPTIMISER LES PERFORMANCES
 -- =============================================================================
 
@@ -601,6 +627,9 @@ CREATE UNIQUE INDEX idx_reservations_numero_paiement_unique
       AND numero_paiement != '';
 -- Réservations d'un client (dashboard, historique, contrôles d'accès)
 CREATE INDEX idx_reservations_utilisateur ON fandrio_app.reservations(util_id);
+-- Ventes au guichet d'un vendeur sur une journée (caisse)
+CREATE INDEX idx_reservations_guichet_vendeur ON fandrio_app.reservations(util_id, created_at) WHERE res_canal = 2;
+CREATE INDEX idx_caisse_clotures_comp_date ON fandrio_app.caisse_clotures(comp_id, clot_date);
 -- Réservations d'un voyage par statut (réservation, libération, stats, gestion statuts)
 CREATE INDEX idx_reservations_voyage_statut ON fandrio_app.reservations(voyage_id, res_statut);
 -- Réservations en attente à libérer (tâche planifiée chaque minute)
@@ -687,6 +716,7 @@ CREATE TRIGGER update_collectes_updated_at BEFORE UPDATE ON fandrio_app.collecte
 CREATE TRIGGER update_audit_places_updated_at BEFORE UPDATE ON fandrio_app.audit_places FOR EACH ROW EXECUTE FUNCTION fandrio_app.update_updated_at_column();
 CREATE TRIGGER update_plan_sieges_updated_at BEFORE UPDATE ON fandrio_app.plan_sieges FOR EACH ROW EXECUTE FUNCTION fandrio_app.update_updated_at_column();
 CREATE TRIGGER update_sieges_reserves_updated_at BEFORE UPDATE ON fandrio_app.sieges_reserves FOR EACH ROW EXECUTE FUNCTION fandrio_app.update_updated_at_column();
+CREATE TRIGGER update_caisse_clotures_updated_at BEFORE UPDATE ON fandrio_app.caisse_clotures FOR EACH ROW EXECUTE FUNCTION fandrio_app.update_updated_at_column();
 
 
 -- =============================================================================

@@ -30,7 +30,9 @@ class Utilisateur extends Authenticatable implements JWTSubject
         'comp_id',
         'util_statut',
         'util_photo',
-        'push_token'
+        'push_token',
+        'util_admin_principal',
+        'util_mdp_provisoire',
     ];
 
     /**
@@ -50,6 +52,8 @@ class Utilisateur extends Authenticatable implements JWTSubject
         'updated_at' => 'datetime',
         'util_statut' => 'integer',
         'util_role' => 'integer',
+        'util_admin_principal' => 'boolean',
+        'util_mdp_provisoire' => 'boolean',
     ];
 
     /**

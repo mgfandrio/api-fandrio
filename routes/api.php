@@ -29,6 +29,8 @@ use App\Http\Controllers\AdminCompagnie\RemboursementController;
 use App\Http\Controllers\AdminCompagnie\ChiffreAffairesController;
 use App\Http\Controllers\AdminCompagnie\CaisseController;
 use App\Http\Controllers\Admin\PlateformeController;
+use App\Http\Controllers\Admin\AccesController;
+use App\Http\Controllers\AdminCompagnie\EquipeController;
 use App\Http\Controllers\AdminCompagnie\CommissionPaiementController;
 use App\Http\Controllers\Webhook\PapiWebhookController;
 use App\Http\Controllers\Notification\NotificationController;
@@ -87,7 +89,7 @@ Route::middleware(['api.key', 'throttle.disponibilite:30,1'])->group(function() 
 
 
 // Routes protégées (nécessitent token JWT + clé API) / pour tous les types utilisateurs
-Route::middleware(['api.key', 'auth:api'])->group(function () {
+Route::middleware(['api.key', 'auth:api', 'compte'])->group(function () {
     // Routes d'authentification
     Route::post('/deconnexion', [AuthentificationController::class, 'deconnexion']);
     Route::get('/moi', [AuthentificationController::class, 'moi']);
@@ -160,7 +162,7 @@ Route::middleware(['api.key', 'auth:api'])->group(function () {
 
 
 // Routes pour l'administrateur de la plateforme
-Route::middleware(['api.key', 'auth:api', 'role:3'])->prefix('admin')->group(function () {
+Route::middleware(['api.key', 'auth:api', 'compte', 'role:3'])->prefix('admin')->group(function () {
     // Gestion des utilisateurs
     Route::prefix('utilisateurs')->group(function () {
         Route::get('/recupListeUtilisateur', [UtilisateurController::class, 'index']);
@@ -199,6 +201,10 @@ Route::middleware(['api.key', 'auth:api', 'role:3'])->prefix('admin')->group(fun
     });
 
     // Gestion des commissions
+    // Accès des comptes : admin principal d'une compagnie, mot de passe provisoire
+    Route::patch('/compagnies/{id}/admin-principal', [AccesController::class, 'designerPrincipal']);
+    Route::post('/utilisateurs/{id}/mot-de-passe-provisoire', [AccesController::class, 'motDePasseProvisoire']);
+
     // Chiffre d'affaires de la plateforme et contrôle des paiements
     Route::get('/chiffre-affaires', [PlateformeController::class, 'chiffreAffaires']);
     Route::get('/chiffre-affaires/ventes', [PlateformeController::class, 'detail']);
@@ -225,7 +231,7 @@ Route::middleware(['api.key', 'auth:api', 'role:3'])->prefix('admin')->group(fun
 
 
 
-Route::middleware(['api.key', 'auth:api', 'role:2'])->prefix('adminCompagnie')->group(function () {
+Route::middleware(['api.key', 'auth:api', 'compte', 'role:2'])->prefix('adminCompagnie')->group(function () {
     // Routes pour la gestion des chauffeurs
     Route::prefix('chauffeur')->group(function () {
         Route::get('/liste', [RecuperationListeChauffeurController::class, 'listeChauffeurs']);                                   // liste des chauffeurs
@@ -327,6 +333,14 @@ Route::middleware(['api.key', 'auth:api', 'role:2'])->prefix('adminCompagnie')->
     // Chiffre d'affaires sur période libre (+ détail pour l'export Excel)
     Route::get('/chiffre-affaires', [ChiffreAffairesController::class, 'resume']);
     Route::get('/chiffre-affaires/ventes', [ChiffreAffairesController::class, 'ventes']);
+
+    // Équipe de la compagnie (gestion réservée à l'admin principal)
+    Route::get('/equipe', [EquipeController::class, 'index']);
+    Route::post('/equipe', [EquipeController::class, 'ajouter']);
+    Route::patch('/equipe/{id}/desactiver', [EquipeController::class, 'desactiver']);
+    Route::patch('/equipe/{id}/reactiver', [EquipeController::class, 'reactiver']);
+    Route::post('/equipe/{id}/mot-de-passe', [EquipeController::class, 'nouveauMotDePasse']);
+    Route::delete('/equipe/{id}', [EquipeController::class, 'retirer']);
 
     // Caisse du guichet : espèces par vendeur et clôture du soir
     Route::get('/caisse', [CaisseController::class, 'jour']);

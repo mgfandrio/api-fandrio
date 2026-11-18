@@ -115,12 +115,18 @@ CREATE TABLE fandrio_app.utilisateurs (
     util_statut INTEGER DEFAULT 1 CHECK (util_statut IN (1, 2, 3)), -- 1: actif, 2: inactif, 3: supprimé
     comp_id INTEGER REFERENCES fandrio_app.compagnies(comp_id) ON DELETE SET NULL,
     push_token VARCHAR(255) NULL,
+    -- Équipe des compagnies : l'admin principal (créé par FANDRIO) gère les autres admins
+    util_admin_principal BOOLEAN NOT NULL DEFAULT FALSE,
+    -- Mot de passe donné par un autre : à changer à la prochaine connexion
+    util_mdp_provisoire BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 COMMENT ON TABLE fandrio_app.utilisateurs IS 'Table des utilisateurs de l''application (clients, admins compagnies, admin système)';
 COMMENT ON COLUMN fandrio_app.utilisateurs.push_token IS 'Token Expo Push notification (ExponentPushToken[...])';
+COMMENT ON COLUMN fandrio_app.utilisateurs.util_admin_principal IS 'Admin compagnie principal (créé par FANDRIO) : seul à gérer l''équipe. Un seul par compagnie.';
+COMMENT ON COLUMN fandrio_app.utilisateurs.util_mdp_provisoire IS 'Mot de passe provisoire à changer à la prochaine connexion (l''API refuse le reste en attendant)';
 
 
 -- =============================================================================
@@ -605,6 +611,8 @@ CREATE INDEX idx_utilisateurs_role ON fandrio_app.utilisateurs(util_role);
 CREATE INDEX idx_utilisateurs_push_token ON fandrio_app.utilisateurs(push_token) WHERE push_token IS NOT NULL;
 -- Admins d'une compagnie (notifications à chaque réservation confirmée)
 CREATE INDEX idx_utilisateurs_compagnie ON fandrio_app.utilisateurs(comp_id) WHERE comp_id IS NOT NULL;
+-- Un seul admin principal par compagnie
+CREATE UNIQUE INDEX idx_utilisateurs_admin_principal_unique ON fandrio_app.utilisateurs(comp_id) WHERE util_admin_principal;
 
 -- Compagnie ↔ provinces (classement des compagnies par province sur l'accueil)
 -- (comp_id est déjà couvert par UNIQUE(comp_id, pro_id))

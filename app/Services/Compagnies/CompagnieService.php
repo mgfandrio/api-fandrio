@@ -419,7 +419,8 @@ class CompagnieService
             'util_password' => Hash::make($adminDTO->motDePasse),
             'util_role' => 2, // Admin compagnie
             'comp_id' => $compagnieId,
-            'util_statut' => 1 // Actif
+            'util_statut' => 1, // Actif
+            'util_admin_principal' => true, // créé par FANDRIO : gère l'équipe de la compagnie
         ]);
     }
 
@@ -631,7 +632,9 @@ class CompagnieService
             'prenom' => $admin->util_prenom,
             'email' => $admin->util_email,
             'telephone' => $admin->util_phone,
-            'statut' => $admin->util_statut
+            'statut' => $admin->util_statut,
+            'admin_principal' => (bool) $admin->util_admin_principal,
+            'mdp_provisoire' => (bool) $admin->util_mdp_provisoire,
         ];
     }
 }

@@ -139,7 +139,9 @@ class AuthentificationController extends Controller
                     'role' => $utilisateur->util_role,
                     'compagnie_id' => $utilisateur->comp_id,
                     'statut' => $utilisateur->util_statut,
-                    'photo' => $utilisateur->util_photo
+                    'photo' => $utilisateur->util_photo,
+                    'admin_principal' => (bool) $utilisateur->util_admin_principal,
+                    'mdp_provisoire' => (bool) $utilisateur->util_mdp_provisoire,
                 ]
             ]);
 
@@ -185,7 +187,9 @@ class AuthentificationController extends Controller
                     'role' => $utilisateur->util_role,
                     'compagnie_id' => $utilisateur->comp_id,
                     'statut' => $utilisateur->util_statut,
-                    'photo' => $utilisateur->util_photo
+                    'photo' => $utilisateur->util_photo,
+                    'admin_principal' => (bool) $utilisateur->util_admin_principal,
+                    'mdp_provisoire' => (bool) $utilisateur->util_mdp_provisoire,
                 ]
             ]);
 
@@ -224,7 +228,15 @@ class AuthentificationController extends Controller
                 ], 422);
             }
 
+            if (Hash::check($request->nouveau_mot_de_passe, $utilisateur->util_password)) {
+                return response()->json([
+                    'statut' => false,
+                    'message' => 'Choisissez un mot de passe différent de l’actuel'
+                ], 422);
+            }
+
             $utilisateur->util_password = Hash::make($request->nouveau_mot_de_passe);
+            $utilisateur->util_mdp_provisoire = false; // mot de passe personnel choisi
             $utilisateur->save();
 
             return response()->json([

@@ -202,7 +202,9 @@ class AuthentificationService
             'compagnie_id' => $utilisateur->comp_id,
             'compagnie' => $compInfo,
             'statut' => $utilisateur->util_statut,
-            'photo' => $utilisateur->util_photo
+            'photo' => $utilisateur->util_photo,
+            'admin_principal' => (bool) $utilisateur->util_admin_principal,
+            'mdp_provisoire' => (bool) $utilisateur->util_mdp_provisoire,
         ];
     }
 }

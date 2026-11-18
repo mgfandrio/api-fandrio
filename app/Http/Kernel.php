@@ -66,6 +66,7 @@ class Kernel extends HttpKernel
         
         'api.key' => \App\Http\Middleware\VerifierCleApi::class,
         'role' => \App\Http\Middleware\VerifierRole::class,
+        'compte' => \App\Http\Middleware\VerifierCompte::class,
         'jwt.auth' => \Tymon\JWTAuth\Http\Middleware\Authenticate::class,
         'jwt.refresh' => \Tymon\JWTAuth\Http\Middleware\RefreshToken::class,
 

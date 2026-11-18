@@ -80,27 +80,19 @@ class Trajet extends Model
     /**
      * Calcule la durée formatée
      */
-    public function getDureeFormatee(): string 
+    public function getDureeFormatee(): string
     {
-        if(!$this->traj_duuree) return '';
+        // traj_duree est un INTERVAL PostgreSQL : « 23:00:00 », « 08:30:00 » ou « 1 day 02:00:00 »
+        if (!$this->traj_duree) return '';
 
-        try {
-            $interval = new \DateInterval($this->traj_duree);
-            $hours = $interval->h;
-            $minutes = $interval->i;
-            
-            if ($hours > 0 && $minutes > 0) {
-                return "{$hours}h {$minutes}min";
-
-            } elseif ($hours > 0) {
-                return "{$hours}h";
-
-            } else {
-                return "{$minutes}min";
-            }
-
-        }catch (\Exception $e) {
-            return $this->traj_duree;
+        if (!preg_match('/^(?:(\d+)\s+days?\s*)?(\d+):(\d{2})/', trim((string) $this->traj_duree), $m)) {
+            return (string) $this->traj_duree;
         }
+        $heures = ((int) ($m[1] ?? 0)) * 24 + (int) $m[2];
+        $minutes = (int) $m[3];
+
+        if ($heures > 0 && $minutes > 0) return "{$heures}h {$minutes}min";
+        if ($heures > 0) return "{$heures}h";
+        return "{$minutes}min";
     }
 }

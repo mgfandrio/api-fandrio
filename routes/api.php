@@ -28,6 +28,7 @@ use App\Http\Controllers\AdminCompagnie\SuiviVoyageController;
 use App\Http\Controllers\AdminCompagnie\RemboursementController;
 use App\Http\Controllers\AdminCompagnie\ChiffreAffairesController;
 use App\Http\Controllers\AdminCompagnie\CaisseController;
+use App\Http\Controllers\Admin\PlateformeController;
 use App\Http\Controllers\AdminCompagnie\CommissionPaiementController;
 use App\Http\Controllers\Webhook\PapiWebhookController;
 use App\Http\Controllers\Notification\NotificationController;
@@ -198,6 +199,11 @@ Route::middleware(['api.key', 'auth:api', 'role:3'])->prefix('admin')->group(fun
     });
 
     // Gestion des commissions
+    // Chiffre d'affaires de la plateforme et contrôle des paiements
+    Route::get('/chiffre-affaires', [PlateformeController::class, 'chiffreAffaires']);
+    Route::get('/chiffre-affaires/ventes', [PlateformeController::class, 'detail']);
+    Route::get('/controle-paiements', [PlateformeController::class, 'controlePaiements']);
+
     Route::prefix('commissions')->group(function () {
         Route::get('/dashboard', [CommissionController::class, 'dashboard']);
         Route::get('/evolution', [CommissionController::class, 'evolution']);

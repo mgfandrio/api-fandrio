@@ -14,7 +14,10 @@ class VoitureDTO
         public int $voit_statut,
         public int $comp_id,
         public int $chauff_id,
-        public string $voit_categorie = 'classique'
+        public string $voit_categorie = 'classique',
+        // Propriétaire : 1 compagnie, 2 particulier (versement au chauffeur)
+        public int $voit_proprietaire = 1,
+        public ?float $voit_taux_compagnie = null
     ) {}
 
 
@@ -30,6 +33,8 @@ class VoitureDTO
             comp_id: (int) $donnees['comp_id'],
             chauff_id: (int) $donnees['chauff_id'],
             voit_categorie: $donnees['voit_categorie'] ?? 'classique',
+            voit_proprietaire: (int) ($donnees['voit_proprietaire'] ?? 1),
+            voit_taux_compagnie: (int) ($donnees['voit_proprietaire'] ?? 1) === 2 && isset($donnees['voit_taux_compagnie']) ? (float) $donnees['voit_taux_compagnie'] : null,
         );
     }
 
@@ -61,7 +66,9 @@ class VoitureDTO
             'voit_statut' => 'required|integer|in:1,2', // 1 disponible, 2 indisponible (3 = supprimé, via la suppression)
             'comp_id'       => 'required|integer|exists:compagnies,comp_id',
             'chauff_id'       => 'required|integer|exists:chauffeurs,chauff_id',
-            'voit_categorie' => 'sometimes|string|in:classique,vip,premium'
+            'voit_categorie' => 'sometimes|string|in:classique,vip,premium',
+            'voit_proprietaire' => 'sometimes|integer|in:1,2',
+            'voit_taux_compagnie' => 'required_if:voit_proprietaire,2|nullable|numeric|min:0|max:100',
         ];
     }
 
@@ -77,7 +84,9 @@ class VoitureDTO
             'voit_statut' => 'sometimes|required|integer|in:1,2',
             'comp_id'       => 'sometimes|required|integer|exists:compagnies,comp_id',
             'chauff_id'       => 'sometimes|required|integer|exists:chauffeurs,chauff_id',
-            'voit_categorie' => 'sometimes|string|in:classique,vip,premium'
+            'voit_categorie' => 'sometimes|string|in:classique,vip,premium',
+            'voit_proprietaire' => 'sometimes|integer|in:1,2',
+            'voit_taux_compagnie' => 'required_if:voit_proprietaire,2|nullable|numeric|min:0|max:100',
         ];
     }
 
@@ -93,7 +102,9 @@ class VoitureDTO
             'voit_statut' => $this->voit_statut,
             'comp_id'       => $this->comp_id,
             'chauff_id'       => $this->chauff_id,
-            'voit_categorie' => $this->voit_categorie
+            'voit_categorie' => $this->voit_categorie,
+            'voit_proprietaire' => $this->voit_proprietaire,
+            'voit_taux_compagnie' => $this->voit_taux_compagnie,
         ], function ($valeur) {
             return $valeur !== null && $valeur !== '';
         });

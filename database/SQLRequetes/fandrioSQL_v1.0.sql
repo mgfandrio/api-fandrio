@@ -181,8 +181,13 @@ CREATE TABLE fandrio_app.voitures (
     voit_categorie VARCHAR(20) DEFAULT 'classique' CHECK (voit_categorie IN ('classique', 'vip', 'premium')),
     comp_id INTEGER NOT NULL REFERENCES fandrio_app.compagnies(comp_id) ON DELETE CASCADE,
     chauff_id INTEGER REFERENCES fandrio_app.chauffeurs(chauff_id) ON DELETE SET NULL,
+    -- Propriétaire : 1 compagnie, 2 particulier (versement au chauffeur, la compagnie prend voit_taux_compagnie %)
+    voit_proprietaire SMALLINT NOT NULL DEFAULT 1 CONSTRAINT voitures_proprietaire_check CHECK (voit_proprietaire IN (1, 2)),
+    voit_taux_compagnie DECIMAL(5,2) NULL CONSTRAINT voitures_taux_compagnie_check
+        CHECK (voit_taux_compagnie IS NULL OR (voit_taux_compagnie >= 0 AND voit_taux_compagnie <= 100)),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT voitures_particulier_taux_check CHECK (voit_proprietaire = 1 OR voit_taux_compagnie IS NOT NULL)
 );
 
 COMMENT ON TABLE fandrio_app.voitures IS 'Table des véhicules des compagnies';
@@ -422,7 +427,7 @@ CREATE TABLE fandrio_app.factures (
 -- =============================================================================
 CREATE TABLE fandrio_app.notifications (
     notif_id SERIAL PRIMARY KEY,
-    notif_type INTEGER NOT NULL CHECK (notif_type IN (1, 2, 3, 4, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17)),
+    notif_type INTEGER NOT NULL CHECK (notif_type IN (1, 2, 3, 4, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18)),
     -- 1: confirmation réservation client
     -- 2: rappel voyage (J-1, J-0)
     -- 3: annulation
@@ -437,6 +442,7 @@ CREATE TABLE fandrio_app.notifications (
     -- 15: retard d'un voyage en route (les deux compagnies)
     -- 16: départ automatique, embarquement non clôturé (compagnie de départ)
     -- 17: partenariat ajouté ou retiré
+    -- 18: rappel de versement à régler au chauffeur (admin compagnie)
     notif_destinataire_type INTEGER NOT NULL CHECK (notif_destinataire_type IN (1, 2, 3)), -- 1: utilisateur, 2: compagnie, 3: admin
     notif_destinataire_id INTEGER NOT NULL,
     notif_titre VARCHAR(200) NOT NULL,
@@ -596,6 +602,45 @@ COMMENT ON TABLE fandrio_app.caisse_clotures IS 'Clôtures de caisse du guichet 
 
 
 -- =============================================================================
+-- 24. TABLE VERSEMENTS (Part des chauffeurs des voitures de particuliers)
+-- =============================================================================
+-- Un par voyage. Montants recalculés tant que la voiture n'est pas partie, puis
+-- figés au départ avec la photo de l'instant (matricule, chauffeur, trajet,
+-- pourcentage) ; le règlement garde qui et quand.
+CREATE TABLE fandrio_app.versements (
+    vers_id SERIAL PRIMARY KEY,
+    comp_id INTEGER NOT NULL REFERENCES fandrio_app.compagnies(comp_id) ON DELETE CASCADE,
+    voyage_id INTEGER NOT NULL UNIQUE REFERENCES fandrio_app.voyages(voyage_id) ON DELETE CASCADE,
+    voit_id INTEGER NULL REFERENCES fandrio_app.voitures(voit_id) ON DELETE SET NULL,
+    voit_matricule VARCHAR(20) NOT NULL,
+    chauff_id INTEGER NULL REFERENCES fandrio_app.chauffeurs(chauff_id) ON DELETE SET NULL,
+    chauffeur_nom VARCHAR(200) NULL,
+    chauffeur_phone VARCHAR(20) NULL,
+    traj_id INTEGER NULL REFERENCES fandrio_app.trajets(traj_id) ON DELETE SET NULL,
+    trajet_libelle VARCHAR(200) NOT NULL,
+    voyage_date DATE NOT NULL,
+    voyage_heure TIME NOT NULL,
+    taux_compagnie DECIMAL(5,2) NOT NULL,
+    nb_places INTEGER NOT NULL DEFAULT 0,
+    nb_sieges INTEGER NOT NULL DEFAULT 0,
+    montant_ventes DECIMAL(12,2) NOT NULL DEFAULT 0,
+    commission_fandrio DECIMAL(12,2) NOT NULL DEFAULT 0,
+    part_compagnie DECIMAL(12,2) NOT NULL DEFAULT 0,
+    part_chauffeur DECIMAL(12,2) NOT NULL DEFAULT 0,
+    vers_statut SMALLINT NOT NULL DEFAULT 1 CHECK (vers_statut IN (1, 2)), -- 1 à régler, 2 réglé
+    vers_fige_le TIMESTAMP NULL,
+    vers_regle_le TIMESTAMP NULL,
+    vers_regle_par INTEGER NULL REFERENCES fandrio_app.utilisateurs(util_id) ON DELETE SET NULL,
+    vers_regle_par_nom VARCHAR(200) NULL,
+    vers_rappel_le TIMESTAMP NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+COMMENT ON TABLE fandrio_app.versements IS 'Versements aux chauffeurs des voitures de particuliers : un par voyage, figé au départ, réglé par la compagnie';
+
+
+-- =============================================================================
 -- INDEX POUR OPTIMISER LES PERFORMANCES
 -- =============================================================================
 
@@ -638,6 +683,10 @@ CREATE INDEX idx_reservations_utilisateur ON fandrio_app.reservations(util_id);
 -- Ventes au guichet d'un vendeur sur une journée (caisse)
 CREATE INDEX idx_reservations_guichet_vendeur ON fandrio_app.reservations(util_id, created_at) WHERE res_canal = 2;
 CREATE INDEX idx_caisse_clotures_comp_date ON fandrio_app.caisse_clotures(comp_id, clot_date);
+CREATE INDEX idx_versements_comp_statut ON fandrio_app.versements(comp_id, vers_statut);
+CREATE INDEX idx_versements_comp_date ON fandrio_app.versements(comp_id, voyage_date);
+CREATE INDEX idx_versements_voiture ON fandrio_app.versements(voit_id);
+CREATE INDEX idx_versements_chauffeur ON fandrio_app.versements(chauff_id);
 -- Réservations d'un voyage par statut (réservation, libération, stats, gestion statuts)
 CREATE INDEX idx_reservations_voyage_statut ON fandrio_app.reservations(voyage_id, res_statut);
 -- Réservations en attente à libérer (tâche planifiée chaque minute)
@@ -725,6 +774,7 @@ CREATE TRIGGER update_audit_places_updated_at BEFORE UPDATE ON fandrio_app.audit
 CREATE TRIGGER update_plan_sieges_updated_at BEFORE UPDATE ON fandrio_app.plan_sieges FOR EACH ROW EXECUTE FUNCTION fandrio_app.update_updated_at_column();
 CREATE TRIGGER update_sieges_reserves_updated_at BEFORE UPDATE ON fandrio_app.sieges_reserves FOR EACH ROW EXECUTE FUNCTION fandrio_app.update_updated_at_column();
 CREATE TRIGGER update_caisse_clotures_updated_at BEFORE UPDATE ON fandrio_app.caisse_clotures FOR EACH ROW EXECUTE FUNCTION fandrio_app.update_updated_at_column();
+CREATE TRIGGER update_versements_updated_at BEFORE UPDATE ON fandrio_app.versements FOR EACH ROW EXECUTE FUNCTION fandrio_app.update_updated_at_column();
 
 
 -- =============================================================================

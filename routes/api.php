@@ -31,6 +31,7 @@ use App\Http\Controllers\AdminCompagnie\CaisseController;
 use App\Http\Controllers\Admin\PlateformeController;
 use App\Http\Controllers\Admin\AccesController;
 use App\Http\Controllers\AdminCompagnie\EquipeController;
+use App\Http\Controllers\AdminCompagnie\VersementController;
 use App\Http\Controllers\AdminCompagnie\CommissionPaiementController;
 use App\Http\Controllers\Webhook\PapiWebhookController;
 use App\Http\Controllers\Notification\NotificationController;
@@ -341,6 +342,11 @@ Route::middleware(['api.key', 'auth:api', 'compte', 'role:2'])->prefix('adminCom
     Route::patch('/equipe/{id}/reactiver', [EquipeController::class, 'reactiver']);
     Route::post('/equipe/{id}/mot-de-passe', [EquipeController::class, 'nouveauMotDePasse']);
     Route::delete('/equipe/{id}', [EquipeController::class, 'retirer']);
+
+    // Versements aux chauffeurs (voitures de particuliers)
+    Route::get('/versements', [VersementController::class, 'index']);
+    Route::get('/versements/compteur', [VersementController::class, 'compteur']);
+    Route::post('/versements/{id}/regler', [VersementController::class, 'regler']);
 
     // Caisse du guichet : espèces par vendeur et clôture du soir
     Route::get('/caisse', [CaisseController::class, 'jour']);

@@ -13,7 +13,7 @@ class VoitureService
     public function __construct(private PlanSiegeService $planSiegeService) {}
 
     /** Champs qu'une modification peut changer (jamais la compagnie). */
-    private const CHAMPS_MODIFIABLES = ['voit_matricule', 'voit_marque', 'voit_modele', 'voit_places', 'voit_statut', 'chauff_id', 'voit_categorie'];
+    private const CHAMPS_MODIFIABLES = ['voit_matricule', 'voit_marque', 'voit_modele', 'voit_places', 'voit_statut', 'chauff_id', 'voit_categorie', 'voit_proprietaire', 'voit_taux_compagnie'];
 
     private function compagnieId(): int
     {
@@ -75,6 +75,14 @@ class VoitureService
         $this->assertCategorieAutorisee((int) $voiture->comp_id, $donneesUpdate['voit_categorie'] ?? $ancienneCategorie);
         if (array_key_exists('chauff_id', $donneesUpdate)) {
             $this->assertChauffeurDeLaCompagnie((int) $donneesUpdate['chauff_id'], (int) $voiture->comp_id);
+        }
+
+        // Voiture de la compagnie : pas de pourcentage ; voiture de particulier : pourcentage obligatoire
+        $proprietaire = (int) ($donneesUpdate['voit_proprietaire'] ?? $voiture->voit_proprietaire ?? 1);
+        if ($proprietaire === 1) {
+            $donneesUpdate['voit_taux_compagnie'] = null;
+        } elseif (($donneesUpdate['voit_taux_compagnie'] ?? $voiture->voit_taux_compagnie) === null) {
+            throw new \Exception('Indiquez le pourcentage pris par la compagnie sur cette voiture de particulier.');
         }
 
         $voiture->update($donneesUpdate);

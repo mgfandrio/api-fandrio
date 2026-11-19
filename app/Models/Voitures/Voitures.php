@@ -25,10 +25,14 @@ class Voitures extends Model
         'voit_statut',
         'comp_id',
         'chauff_id',
-        'voit_categorie'
+        'voit_categorie',
+        'voit_proprietaire',
+        'voit_taux_compagnie',
     ];
 
     protected $casts = [
+        'voit_proprietaire' => 'integer',
+        'voit_taux_compagnie' => 'float',
         'created_at' => 'datetime',
         'updated_at' => 'datetime'
     ];

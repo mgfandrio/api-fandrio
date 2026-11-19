@@ -45,6 +45,9 @@ class Kernel extends ConsoleKernel
 
         // Suspension des compagnies à commission impayée (> délai de grâce) + réactivation (07:00)
         $schedule->command('commissions:suspendre-impayees')->dailyAt('07:00')->onOneServer();
+
+        // Versements aux chauffeurs : figer les voyages passés et rappeler les non réglés (08:00)
+        $schedule->command('versements:rappels')->dailyAt('08:00')->onOneServer();
     }
 
     /**

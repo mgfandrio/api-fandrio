@@ -162,6 +162,7 @@ class SuiviVoyageService
         });
 
         $this->notifierDepart($voyage);
+        $this->figerVersement($voyage->voyage_id);
         return $this->detail($voyage->voyage_id, $compId);
     }
 
@@ -236,6 +237,7 @@ class SuiviVoyageService
             if ($maj) {
                 $auto++;
                 $this->notifierDepart($voyage->refresh()->load(self::RELATIONS));
+                $this->figerVersement($voyage->voyage_id);
             }
         }
 
@@ -577,6 +579,16 @@ class SuiviVoyageService
         NotificationService::notifierAdminsCompagnie((int) $v->trajet->comp_id, 15, '⚠️ Voiture en retard', $message);
         if ($v->comp_reception) {
             NotificationService::notifierAdminsCompagnie((int) $v->comp_reception, 15, '⚠️ Voiture en retard', $message);
+        }
+    }
+
+    /** Voiture partie : le versement au chauffeur (voiture de particulier) est figé. */
+    private function figerVersement(int $voyageId): void
+    {
+        try {
+            app(\App\Services\Versement\VersementService::class)->synchroniser($voyageId);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Versement non figé au départ : ' . $e->getMessage(), ['voyage_id' => $voyageId]);
         }
     }
 }

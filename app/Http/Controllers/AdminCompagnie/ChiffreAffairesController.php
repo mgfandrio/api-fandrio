@@ -40,13 +40,15 @@ class ChiffreAffairesController extends Controller
                 COALESCE(SUM(r.nb_voyageurs), 0) AS billets,
                 COALESCE(SUM(CASE WHEN r.res_canal = ? THEN r.nb_voyageurs ELSE 0 END), 0) AS billets_guichet,
                 COUNT(*) AS reservations,
-                COUNT(DISTINCT r.voyage_id) AS voyages
+                COUNT(DISTINCT r.voyage_id) AS voyages,
+                COALESCE(SUM(" . $this->exprPartChauffeur() . "), 0) AS chauffeurs
             ", [Reservation::CANAL_GUICHET, Reservation::CANAL_GUICHET])->first();
 
             $brut = (float) $t->brut;
             $guichet = (float) $t->guichet;
             $enLigne = round($brut - $guichet, 2);
             $commission = round($enLigne * self::TAUX_COMMISSION, 2);
+            $chauffeurs = round((float) $t->chauffeurs, 2);
 
             // ── Période précédente de même durée (comparaison) ──
             // Période commençant un 1er du mois : mêmes dates le mois précédent
@@ -85,7 +87,8 @@ class ChiffreAffairesController extends Controller
                 ->selectRaw("t.traj_id, pd.pro_nom AS depart, pa.pro_nom AS arrivee, t.traj_tarif AS tarif,
                     COUNT(DISTINCT r.voyage_id) AS voyages, SUM(r.nb_voyageurs) AS billets,
                     SUM(CASE WHEN r.res_canal = ? THEN r.montant_total ELSE 0 END) AS guichet,
-                    SUM(CASE WHEN r.res_canal = ? THEN 0 ELSE r.montant_total END) AS en_ligne", [Reservation::CANAL_GUICHET, Reservation::CANAL_GUICHET])
+                    SUM(CASE WHEN r.res_canal = ? THEN 0 ELSE r.montant_total END) AS en_ligne,
+                    COALESCE(SUM(" . $this->exprPartChauffeur() . "), 0) AS chauffeurs", [Reservation::CANAL_GUICHET, Reservation::CANAL_GUICHET])
                 ->orderByRaw('SUM(r.montant_total) DESC')->get()
                 ->map(function ($l) use ($placesParTrajet) {
                     $places = (int) ($placesParTrajet[$l->traj_id] ?? 0);
@@ -99,6 +102,7 @@ class ChiffreAffairesController extends Controller
                         'guichet' => (float) $l->guichet,
                         'en_ligne' => (float) $l->en_ligne,
                         'total' => (float) $l->guichet + (float) $l->en_ligne,
+                        'part_chauffeurs' => round((float) $l->chauffeurs, 2),
                     ];
                 });
 
@@ -140,7 +144,9 @@ class ChiffreAffairesController extends Controller
                         'guichet' => $guichet,
                         'en_ligne' => $enLigne,
                         'commission' => $commission,
-                        'net' => round($brut - $commission, 2),
+                        // Part des chauffeurs des voitures de particuliers (voir « Versements »)
+                        'part_chauffeurs' => $chauffeurs,
+                        'net' => round($brut - $commission - $chauffeurs, 2),
                         'billets' => (int) $t->billets,
                         'billets_guichet' => (int) $t->billets_guichet,
                         'billets_en_ligne' => (int) $t->billets - (int) $t->billets_guichet,
@@ -191,7 +197,8 @@ class ChiffreAffairesController extends Controller
                 ->get([
                     'r.res_numero', 'r.created_at', 'r.res_canal', 'r.nb_voyageurs', 'r.montant_total',
                     'v.voyage_date', 'v.voyage_heure_depart', 'pd.pro_nom as depart', 'pa.pro_nom as arrivee',
-                    'tp.type_paie_nom as paiement', 'u.util_nom', 'u.util_prenom',
+                    'tp.type_paie_nom as paiement', 'u.util_nom', 'u.util_prenom', 'vo.voit_matricule',
+                    DB::raw($this->exprPartChauffeur() . ' AS part_chauffeur'),
                 ]);
             if ($ventes->count() > self::MAX_LIGNES) {
                 throw new \InvalidArgumentException('Trop de ventes sur cette période pour un seul fichier : choisissez une période plus courte.');
@@ -214,7 +221,9 @@ class ChiffreAffairesController extends Controller
                     'billets' => (int) $l->nb_voyageurs,
                     'montant' => $montant,
                     'commission' => $commission,
-                    'net' => round($montant - $commission, 2),
+                    'voiture' => $l->voit_matricule,
+                    'part_chauffeur' => round((float) $l->part_chauffeur, 2),
+                    'net' => round($montant - $commission - (float) $l->part_chauffeur, 2),
                 ];
             });
 
@@ -255,10 +264,25 @@ class ChiffreAffairesController extends Controller
         $q = DB::table('fandrio_app.reservations as r')
             ->join('fandrio_app.voyages as v', 'v.voyage_id', '=', 'r.voyage_id')
             ->join('fandrio_app.trajets as t', 't.traj_id', '=', 'v.traj_id')
+            // Part des chauffeurs : versement figé au départ, sinon réglage actuel de la voiture
+            ->leftJoin('fandrio_app.voitures as vo', 'vo.voit_id', '=', 'v.voit_id')
+            ->leftJoin('fandrio_app.versements as ve', 've.voyage_id', '=', 'v.voyage_id')
             ->where('t.comp_id', $this->compagnieId())
             ->whereIn('r.res_statut', self::STATUTS_ENCAISSES)
             ->whereBetween('r.created_at', [$du, $au]);
         return $this->filtrer($q, $request);
+    }
+
+    /**
+     * Part du chauffeur d'une réservation (voiture de particulier) : ventes moins
+     * la commission FANDRIO des ventes en ligne, moins le pourcentage de la compagnie.
+     * Pourcentage figé dans le versement au départ, sinon celui de la voiture.
+     */
+    private function exprPartChauffeur(): string
+    {
+        $taux = 'COALESCE(ve.taux_compagnie, CASE WHEN vo.voit_proprietaire = 2 THEN vo.voit_taux_compagnie END)';
+        $commission = 'CASE WHEN r.res_canal <> ' . Reservation::CANAL_GUICHET . ' THEN r.montant_total * ' . self::TAUX_COMMISSION . ' ELSE 0 END';
+        return "CASE WHEN {$taux} IS NULL THEN 0 ELSE (r.montant_total - {$commission}) * (1 - {$taux} / 100) END";
     }
 
     /** « Cash » (nom technique en base) est affiché « Espèces ». */

@@ -42,7 +42,9 @@ class CaisseController extends Controller
             $ventes = $this->ventesGuichet($compId)
                 ->whereDate('r.created_at', $jour)
                 ->groupBy('r.util_id')
-                ->selectRaw('r.util_id, COUNT(*) AS nb_ventes, SUM(r.nb_voyageurs) AS nb_billets, SUM(r.montant_total) AS attendu, MAX(r.created_at) AS derniere_vente')
+                ->selectRaw('r.util_id, COUNT(*) AS nb_ventes, SUM(r.nb_voyageurs) AS nb_billets, SUM(r.montant_total) AS attendu, MAX(r.created_at) AS derniere_vente, '
+                    // Part des chauffeurs (voitures de particuliers) : pas de commission FANDRIO au guichet
+                    . 'COALESCE(SUM(r.montant_total * (1 - COALESCE(ve.taux_compagnie, CASE WHEN vo.voit_proprietaire = 2 THEN vo.voit_taux_compagnie END) / 100)), 0) AS part_chauffeurs')
                 ->get()->keyBy('util_id');
 
             $clotures = DB::table('fandrio_app.caisse_clotures as c')
@@ -67,6 +69,7 @@ class CaisseController extends Controller
                     'nb_ventes' => $nbVentes,
                     'nb_billets' => (int) ($v->nb_billets ?? 0),
                     'attendu' => $attendu,
+                    'part_chauffeurs' => round((float) ($v->part_chauffeurs ?? 0), 2),
                     'cloture' => $c ? $this->formaterCloture($c) : null,
                     // Ventes faites après la clôture : à recompter
                     'a_recloturer' => $c !== null && ((float) $c->clot_attendu !== $attendu || (int) $c->clot_nb_ventes !== $nbVentes),
@@ -82,6 +85,7 @@ class CaisseController extends Controller
                     'billets' => self::BILLETS,
                     'totaux' => [
                         'attendu' => (float) $caisses->sum('attendu'),
+                        'part_chauffeurs' => round((float) $caisses->sum('part_chauffeurs'), 2),
                         'nb_ventes' => (int) $caisses->sum('nb_ventes'),
                         'nb_billets' => (int) $caisses->sum('nb_billets'),
                         'nb_caisses' => $caisses->count(),
@@ -231,6 +235,8 @@ class CaisseController extends Controller
         return DB::table('fandrio_app.reservations as r')
             ->join('fandrio_app.voyages as v', 'v.voyage_id', '=', 'r.voyage_id')
             ->join('fandrio_app.trajets as t', 't.traj_id', '=', 'v.traj_id')
+            ->leftJoin('fandrio_app.voitures as vo', 'vo.voit_id', '=', 'v.voit_id')
+            ->leftJoin('fandrio_app.versements as ve', 've.voyage_id', '=', 'v.voyage_id')
             ->where('t.comp_id', $compId)
             ->where('r.res_canal', Reservation::CANAL_GUICHET);
     }

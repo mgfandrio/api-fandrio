@@ -11,6 +11,12 @@ use Illuminate\Support\Facades\DB;
 
 class AuthentificationService
 {
+    /** Message unique en cas d'échec : ne dit jamais si c'est l'identifiant ou le mot de passe. */
+    public const MESSAGE_ECHEC_CONNEXION = 'Identifiant ou mot de passe incorrect.';
+
+    /** Empreinte bcrypt d'un mot de passe aléatoire, vérifiée quand le compte n'existe pas. */
+    private const EMPREINTE_FACTICE = '$2y$12$1XFRibjA.eyw.KGG7kv8AeUrQa6uzFk5t4IJfmKgtEM2uDWN4vhVq';
+
     /**
      * Traite la connexion d'un utilisateur
      */
@@ -24,8 +30,12 @@ class AuthentificationService
         // Recherche de l'utilisateur par email ou téléphone
         $utilisateur = $this->trouverUtilisateurParIdentifiant($connexionDTO->identifiant);
 
-        if (!$utilisateur || !Hash::check($connexionDTO->motDePasse, $utilisateur->util_password)) {
-            throw new \Exception('Identifiants incorrects');
+        // Même message et même durée que le compte existe ou non : aucune piste sur
+        // l'identifiant (on vérifie une empreinte factice quand le compte est inconnu).
+        $empreinte = $utilisateur?->util_password ?? self::EMPREINTE_FACTICE;
+        $motDePasseValide = Hash::check($connexionDTO->motDePasse, $empreinte);
+        if (!$utilisateur || !$motDePasseValide) {
+            throw new \Exception(self::MESSAGE_ECHEC_CONNEXION);
         }
 
         if (!$utilisateur->estActif()) {
@@ -119,8 +129,10 @@ class AuthentificationService
             return false; // connexion admin système désactivée
         }
 
-        return hash_equals($identifiant, (string) $connexionDTO->identifiant)
-            && Hash::check($connexionDTO->motDePasse, $empreinte);
+        // Empreinte vérifiée à chaque tentative, quel que soit l'identifiant : sinon la
+        // réponse plus lente trahirait l'identifiant de l'admin système.
+        $motDePasseAdmin = Hash::check($connexionDTO->motDePasse, $empreinte);
+        return hash_equals($identifiant, (string) $connexionDTO->identifiant) && $motDePasseAdmin;
     }
 
     /**

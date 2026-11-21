@@ -534,6 +534,11 @@ class CommissionController extends Controller
                 $query->where('coll_date_prevue', '<=', today())
                       ->where('coll_statut', Collecte::EN_ATTENTE);
             }
+            // Non versées depuis 7 jours ou plus (averties ou suspendues)
+            if ($request->boolean('en_retard')) {
+                $query->where('coll_statut', Collecte::EN_ATTENTE)
+                      ->where('coll_date_prevue', '<=', today()->subDays(\App\Services\Commission\CommissionService::AVERTISSEMENT_JOURS));
+            }
 
             $collectes = $query->paginate($request->get('per_page', 20));
 

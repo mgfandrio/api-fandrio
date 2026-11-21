@@ -2,6 +2,8 @@
 
 namespace App\DTOs;
 
+
+use App\Rules\TelephoneMalgache;
 class ChauffeurDTO
 {
     public function __construct(
@@ -60,7 +62,7 @@ class ChauffeurDTO
             'chauff_age'    => 'required|integer|min:18',
             'chauff_cin'    => 'required|string|unique:chauffeurs,chauff_cin',
             'chauff_permis' => 'required|string|in:A,B,C,D',
-            'chauff_phone'  => 'required|string|max:20',
+            'chauff_phone'  => ['required', 'string', new TelephoneMalgache],
             'chauff_statut' => 'required|integer',
             'chauff_photo'  => 'nullable|image|max:2048',
             'comp_id'       => 'required|integer|exists:compagnies,comp_id'
@@ -77,7 +79,7 @@ class ChauffeurDTO
             'chauff_age'    => 'sometimes|required|integer|min:18',
             'chauff_cin'    => 'sometimes|required|string|unique:chauffeurs,chauff_cin,' . $idChauffeur . ',chauff_id',
             'chauff_permis' => 'sometimes|required|string|in:A,B,C,D',
-            'chauff_phone'  => 'sometimes|required|string|max:20',
+            'chauff_phone'  => ['sometimes', 'required', 'string', new TelephoneMalgache],
             'chauff_statut' => 'sometimes|required|integer',
             'chauff_photo'  => 'sometimes|nullable|image|max:2048',
             'comp_id'       => 'sometimes|required|integer|exists:compagnies,comp_id'

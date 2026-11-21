@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\AdminCompagnie;
 
+
+use App\Rules\TelephoneMalgache;
 use App\Http\Controllers\Controller;
 use App\Models\Reservation\Reservation;
 use App\Models\Paiements\TypePaiement;
@@ -887,7 +889,7 @@ class ReservationAdminController extends Controller
                 'voyageurs.*.siege' => 'required|string|max:10|distinct',
                 'voyageurs.*.nom' => 'required|string|max:100',
                 'voyageurs.*.prenom' => 'nullable|string|max:100',
-                'voyageurs.*.telephone' => 'nullable|string|max:20',
+                'voyageurs.*.telephone' => ['nullable', 'string', new TelephoneMalgache],
                 'embarquer' => 'sometimes|boolean',
             ]);
 

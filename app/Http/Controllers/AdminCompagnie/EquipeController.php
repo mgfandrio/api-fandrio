@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\AdminCompagnie;
 
+
+use App\Rules\TelephoneMalgache;
 use App\Http\Controllers\Controller;
 use App\Models\Utilisateurs\Utilisateur;
 use Illuminate\Http\JsonResponse;
@@ -52,7 +54,7 @@ class EquipeController extends Controller
         $donnees = $request->validate([
             'prenom' => 'required|string|max:100',
             'nom' => 'required|string|max:100',
-            'telephone' => 'required|string|max:20',
+            'telephone' => ['required', 'string', new TelephoneMalgache],
             'email' => 'required|email|max:150',
         ], [], ['prenom' => 'prénom', 'telephone' => 'téléphone', 'email' => 'e-mail']);
 

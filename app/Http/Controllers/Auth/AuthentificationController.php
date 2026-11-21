@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Auth;
 
+
+use App\Rules\TelephoneMalgache;
 use App\Services\Authentification\AuthentificationService;
 use App\Services\Cloudinary\CloudinaryService;
 use App\Http\Controllers\Controller;
@@ -56,7 +58,7 @@ class AuthentificationController extends Controller
                 'nom' => 'required|string|max:100',
                 'prenom' => 'required|string|max:100',
                 'email' => 'required|email|max:150',
-                'telephone' => 'required|string|max:20',
+                'telephone' => ['required', 'string', new TelephoneMalgache],
                 'motDePasse' => 'required|string|min:6',
                 'dateNaissance' => 'sometimes|date'
             ]);
@@ -165,7 +167,7 @@ class AuthentificationController extends Controller
                 'nom' => 'sometimes|string|max:100',
                 'prenom' => 'sometimes|string|max:100',
                 'email' => 'sometimes|email|max:150|unique:fandrio_app.utilisateurs,util_email,' . $utilisateur->util_id . ',util_id',
-                'telephone' => 'sometimes|string|max:20|unique:fandrio_app.utilisateurs,util_phone,' . $utilisateur->util_id . ',util_id',
+                'telephone' => ['sometimes', 'string', new TelephoneMalgache, 'unique:fandrio_app.utilisateurs,util_phone,' . $utilisateur->util_id . ',util_id'],
             ]);
 
             if ($request->has('nom')) $utilisateur->util_nom = $request->nom;

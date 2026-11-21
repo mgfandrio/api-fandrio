@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Client;
 
+
+use App\Rules\TelephoneMalgache;
 use App\Http\Controllers\Controller;
 use App\Models\Reservation\Reservation;
 use App\Events\SiegeUpdated;
@@ -167,8 +169,8 @@ class ReservationController extends Controller
                 'voyageurs' => 'required|array|min:1',
                 'voyageurs.*.nom' => 'required|string',
                 'voyageurs.*.prenom' => 'required|string',
-                'voyageurs.*.phone' => 'required|string',
-                'voyageurs.*.phone2' => 'required|string',
+                'voyageurs.*.phone' => ['required', 'string', new TelephoneMalgache],
+                'voyageurs.*.phone2' => ['required', 'string', new TelephoneMalgache],
                 'voyageurs.*.cin' => 'nullable|string',
                 'voyageurs.*.age' => 'nullable|integer',
                 'voyageurs.*.siege_numero' => 'required|string|distinct',

@@ -2,6 +2,8 @@
 
 namespace App\DTOs;
 
+
+use App\Rules\TelephoneMalgache;
 class VoyageurDTO
 {
     public function __construct(
@@ -59,8 +61,8 @@ class VoyageurDTO
             'voya_prenom' => 'required|string|max:100',
             'voya_age'    => 'nullable|integer|min:1|max:149',
             'voya_cin'    => 'nullable|string|max:20|unique:fandrio_app.voyageurs,voya_cin',
-            'voya_phone'  => 'nullable|string|max:20',
-            'voya_phone2' => 'nullable|string|max:20',
+            'voya_phone'  => ['nullable', 'string', new TelephoneMalgache],
+            'voya_phone2' => ['nullable', 'string', new TelephoneMalgache],
             'util_id'     => 'required|integer|exists:fandrio_app.utilisateurs,util_id'
         ];
     }
@@ -77,8 +79,8 @@ class VoyageurDTO
             'voyageurs.*.voya_prenom' => 'required|string|max:100',
             'voyageurs.*.voya_age'    => 'nullable|integer|min:1|max:149',
             'voyageurs.*.voya_cin'    => 'nullable|string|max:20',
-            'voyageurs.*.voya_phone'  => 'nullable|string|max:20',
-            'voyageurs.*.voya_phone2' => 'nullable|string|max:20',
+            'voyageurs.*.voya_phone'  => ['nullable', 'string', new TelephoneMalgache],
+            'voyageurs.*.voya_phone2' => ['nullable', 'string', new TelephoneMalgache],
         ];
     }
 
@@ -93,8 +95,8 @@ class VoyageurDTO
             'voya_prenom' => 'sometimes|required|string|max:100',
             'voya_age'    => 'sometimes|nullable|integer|min:1|max:149',
             'voya_cin'    => 'sometimes|nullable|string|max:20|unique:fandrio_app.voyageurs,voya_cin,' . $idVoyageur . ',voya_id',
-            'voya_phone'  => 'sometimes|nullable|string|max:20',
-            'voya_phone2' => 'sometimes|nullable|string|max:20',
+            'voya_phone'  => ['sometimes', 'nullable', 'string', new TelephoneMalgache],
+            'voya_phone2' => ['sometimes', 'nullable', 'string', new TelephoneMalgache],
         ];
     }
 

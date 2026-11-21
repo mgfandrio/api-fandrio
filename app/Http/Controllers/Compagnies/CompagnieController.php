@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Compagnies;
 
+
+use App\Rules\TelephoneMalgache;
 use App\Http\Controllers\Controller;
 use App\Services\Compagnies\CompagnieService;
 use App\Services\Cloudinary\CloudinaryService;
@@ -92,7 +94,7 @@ class CompagnieController extends Controller
                 'comp_nif' => 'required|string|max:50',
                 'comp_stat' => 'required|string|max:50',
                 'comp_description' => 'required|string',
-                'comp_phone' => 'required|string|max:20',
+                'comp_phone' => ['required', 'string', new TelephoneMalgache],
                 'comp_email' => 'required|email|max:100',
                 'comp_adresse' => 'required|string',
                 'provinces_desservies' => 'sometimes|array',
@@ -110,7 +112,7 @@ class CompagnieController extends Controller
                 'admin_nom' => 'required|string|max:100',
                 'admin_prenom' => 'required|string|max:100',
                 'admin_email' => 'required|email|max:150',
-                'admin_telephone' => 'required|string|max:20',
+                'admin_telephone' => ['required', 'string', new TelephoneMalgache],
                 'admin_mot_de_passe' => 'required|string|min:6',
 
                 // Compagnies partenaires (au moins une, sauf s'il n'existe encore aucune autre compagnie)
@@ -199,7 +201,7 @@ class CompagnieController extends Controller
     {
         $donnees = $request->validate([
             'comp_description' => 'sometimes|nullable|string|max:2000',
-            'comp_phone' => 'sometimes|nullable|string|max:20',
+            'comp_phone' => ['sometimes', 'nullable', 'string', new TelephoneMalgache],
             'comp_email' => 'sometimes|nullable|email|max:100',
             'comp_adresse' => 'sometimes|nullable|string|max:500',
             'comp_localisation' => 'sometimes|nullable|integer|exists:provinces,pro_id',
@@ -235,7 +237,7 @@ class CompagnieController extends Controller
                 'comp_nif' => 'required|string|max:50',
                 'comp_stat' => 'required|string|max:50',
                 'comp_description' => 'required|string',
-                'comp_phone' => 'required|string|max:20',
+                'comp_phone' => ['required', 'string', new TelephoneMalgache],
                 'comp_email' => 'required|email|max:100',
                 'comp_adresse' => 'required|string',
                 'comp_localisation' => 'required|integer|exists:provinces,pro_id',

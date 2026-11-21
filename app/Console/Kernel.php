@@ -40,11 +40,11 @@ class Kernel extends ConsoleKernel
         // (toutes les heures pour couvrir les voyages partant à n'importe quelle heure)
         $schedule->command('voyages:rappels')->hourly()->onOneServer();
 
-        // Génération automatique des collectes de commission (chaque jour à 06:00)
-        $schedule->command('commissions:generer-collectes')->dailyAt('06:00')->onOneServer();
+        // Commission FANDRIO : tranche à verser dès N voyages terminés (ou 30 jours) — toutes les 15 min
+        $schedule->command('commissions:generer-collectes')->everyFifteenMinutes()->withoutOverlapping()->onOneServer();
 
-        // Suspension des compagnies à commission impayée (> délai de grâce) + réactivation (07:00)
-        $schedule->command('commissions:suspendre-impayees')->dailyAt('07:00')->onOneServer();
+        // Commission non versée : rappel quotidien, avertissement à 7 j, suspension après 14 j (08:00)
+        $schedule->command('commissions:suspendre-impayees')->dailyAt('08:00')->onOneServer();
 
         // Versements aux chauffeurs : figer les voyages passés et rappeler les non réglés (08:00)
         $schedule->command('versements:rappels')->dailyAt('08:00')->onOneServer();

@@ -27,6 +27,12 @@ class Collecte extends Model
         'coll_papi_transaction_id',
         'coll_paye_le',
         'coll_mode',
+        'coll_nb_voyages',
+        'coll_motif',
+        'coll_derniere_relance',
+        'coll_avertie_le',
+        'coll_papi_url',
+        'coll_initie_par',
     ];
 
     protected $casts = [
@@ -41,6 +47,9 @@ class Collecte extends Model
         'coll_nb_billets'        => 'integer',
         'coll_statut'            => 'integer',
         'coll_paye_le'           => 'datetime',
+        'coll_nb_voyages'        => 'integer',
+        'coll_derniere_relance'  => 'date',
+        'coll_avertie_le'        => 'datetime',
     ];
 
     // Statuts
@@ -50,6 +59,26 @@ class Collecte extends Model
     // Modes de règlement
     const MODE_MANUEL = 'manuel';
     const MODE_PAPI   = 'papi';
+
+    // Motif de la tranche
+    const MOTIF_SEUIL = 'seuil'; // N voyages atteints
+    const MOTIF_DELAI = 'delai'; // 30 jours écoulés avant d'atteindre N voyages
+
+    /** Voyages comptés dans cette tranche. */
+    public function voyages()
+    {
+        return $this->hasMany(\App\Models\Voyages\Voyage::class, 'coll_id', 'coll_id');
+    }
+
+    public function journal()
+    {
+        return $this->hasMany(CollecteJournal::class, 'coll_id', 'coll_id');
+    }
+
+    public function initiePar()
+    {
+        return $this->belongsTo(Utilisateur::class, 'coll_initie_par', 'util_id');
+    }
 
     public function compagnie()
     {

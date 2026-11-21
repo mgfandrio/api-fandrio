@@ -18,6 +18,7 @@ DROP TABLE IF EXISTS fandrio_app.failed_jobs CASCADE;
 DROP TABLE IF EXISTS fandrio_app.sieges_reserves CASCADE;
 DROP TABLE IF EXISTS fandrio_app.plan_sieges CASCADE;
 DROP TABLE IF EXISTS fandrio_app.audit_places CASCADE;
+DROP TABLE IF EXISTS fandrio_app.collecte_journal CASCADE;
 DROP TABLE IF EXISTS fandrio_app.collectes CASCADE;
 DROP TABLE IF EXISTS fandrio_app.commissions CASCADE;
 DROP TABLE IF EXISTS fandrio_app.factures CASCADE;
@@ -71,8 +72,8 @@ CREATE TABLE fandrio_app.compagnies (
     comp_email VARCHAR(100),
     comp_adresse TEXT,
     comp_localisation INTEGER REFERENCES fandrio_app.provinces(pro_id) ON DELETE SET NULL,
-    comm_frequence_collecte VARCHAR(20) DEFAULT 'mensuelle',
-    comm_jour_collecte VARCHAR(20) DEFAULT NULL,
+    comm_mode_versement VARCHAR(12) NOT NULL DEFAULT 'manuel',
+    comm_seuil_voyages INTEGER NOT NULL DEFAULT 5,
     comm_actif BOOLEAN DEFAULT TRUE,
     comp_mode_vip BOOLEAN DEFAULT FALSE,
     comp_mode_premium BOOLEAN DEFAULT FALSE,
@@ -83,13 +84,14 @@ CREATE TABLE fandrio_app.compagnies (
     comp_papi_actif BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT chk_frequence_collecte CHECK (comm_frequence_collecte IN ('hebdomadaire', 'mensuelle'))
+    CONSTRAINT chk_mode_versement CHECK (comm_mode_versement IN ('manuel', 'automatique')),
+    CONSTRAINT chk_seuil_voyages CHECK (comm_seuil_voyages BETWEEN 1 AND 100)
 );
 
 COMMENT ON TABLE fandrio_app.compagnies IS 'Table des compagnies de transport';
 COMMENT ON COLUMN fandrio_app.compagnies.comp_localisation IS 'ID de la province qui sert de localisation principale à la compagnie';
-COMMENT ON COLUMN fandrio_app.compagnies.comm_frequence_collecte IS 'Fréquence de collecte des commissions : hebdomadaire ou mensuelle';
-COMMENT ON COLUMN fandrio_app.compagnies.comm_jour_collecte IS 'Jour de collecte (lundi-dimanche pour hebdo, 1-28 pour mensuel)';
+COMMENT ON COLUMN fandrio_app.compagnies.comm_mode_versement IS 'manuel : la compagnie clique « Verser la commission » ; automatique : le lien de paiement est envoyé dès que la tranche est atteinte';
+COMMENT ON COLUMN fandrio_app.compagnies.comm_seuil_voyages IS 'Nombre de voyages terminés (avec ventes en ligne) par tranche de commission';
 COMMENT ON COLUMN fandrio_app.compagnies.comm_actif IS 'Active/désactive le calcul de commission pour cette compagnie';
 COMMENT ON COLUMN fandrio_app.compagnies.comp_mode_vip IS 'Autorise la compagnie à créer des trajets/voitures de catégorie VIP (activé par le super-admin)';
 COMMENT ON COLUMN fandrio_app.compagnies.comp_mode_premium IS 'Autorise la compagnie à créer des trajets/voitures de catégorie Premium (activé par le super-admin)';
@@ -497,16 +499,50 @@ CREATE TABLE fandrio_app.collectes (
     coll_papi_transaction_id VARCHAR(100) NULL,
     coll_paye_le TIMESTAMP NULL,
     coll_mode VARCHAR(20) NOT NULL DEFAULT 'manuel' CHECK (coll_mode IN ('manuel', 'papi')),
+    -- Tranche de voyages : nombre de voyages, motif (seuil atteint / 30 jours écoulés), relances
+    coll_nb_voyages INTEGER NOT NULL DEFAULT 0,
+    coll_motif VARCHAR(10) NOT NULL DEFAULT 'seuil',
+    coll_derniere_relance DATE NULL,
+    coll_avertie_le TIMESTAMP NULL,
+    coll_papi_url TEXT NULL,
+    coll_initie_par INTEGER NULL REFERENCES fandrio_app.utilisateurs(util_id),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(comp_id, coll_periode_debut, coll_periode_fin)
+    CONSTRAINT chk_coll_motif CHECK (coll_motif IN ('seuil', 'delai'))
 );
+
+COMMENT ON COLUMN fandrio_app.collectes.coll_nb_voyages IS 'Nombre de voyages compris dans la tranche';
+COMMENT ON COLUMN fandrio_app.collectes.coll_motif IS 'seuil : tranche de N voyages atteinte ; delai : 30 jours écoulés avant le seuil';
+COMMENT ON COLUMN fandrio_app.collectes.coll_initie_par IS 'Admin compagnie qui a lancé le versement';
 
 -- FK reservations.coll_id → collectes (déclarée ici car collectes est créée après reservations)
 ALTER TABLE fandrio_app.reservations
     ADD CONSTRAINT reservations_coll_id_fkey
     FOREIGN KEY (coll_id) REFERENCES fandrio_app.collectes(coll_id) ON DELETE SET NULL;
 CREATE INDEX idx_reservations_coll_id ON fandrio_app.reservations(coll_id);
+
+-- Voyage → tranche de commission qui l'a compté (NULL = pas encore compté)
+ALTER TABLE fandrio_app.voyages ADD COLUMN coll_id INTEGER NULL;
+ALTER TABLE fandrio_app.voyages
+    ADD CONSTRAINT voyages_coll_id_fkey
+    FOREIGN KEY (coll_id) REFERENCES fandrio_app.collectes(coll_id) ON DELETE SET NULL;
+CREATE INDEX idx_voyages_coll_id ON fandrio_app.voyages(coll_id);
+COMMENT ON COLUMN fandrio_app.voyages.coll_id IS 'Tranche de commission qui a compté ce voyage (NULL = pas encore compté)';
+
+-- Journal des actions sur les commissions (qui a fait quoi, quand)
+CREATE TABLE fandrio_app.collecte_journal (
+    cj_id SERIAL PRIMARY KEY,
+    comp_id INTEGER NOT NULL REFERENCES fandrio_app.compagnies(comp_id) ON DELETE CASCADE,
+    coll_id INTEGER NULL REFERENCES fandrio_app.collectes(coll_id) ON DELETE SET NULL,
+    util_id INTEGER NULL REFERENCES fandrio_app.utilisateurs(util_id) ON DELETE SET NULL,
+    cj_acteur VARCHAR(20) NOT NULL DEFAULT 'systeme' CHECK (cj_acteur IN ('systeme', 'admin_compagnie', 'admin_systeme', 'paiement')),
+    cj_action VARCHAR(40) NOT NULL,
+    cj_message TEXT NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_collecte_journal_comp ON fandrio_app.collecte_journal(comp_id, created_at DESC);
+CREATE INDEX idx_collecte_journal_coll ON fandrio_app.collecte_journal(coll_id);
+COMMENT ON TABLE fandrio_app.collecte_journal IS 'Historique des actions sur les commissions FANDRIO (tranches, rappels, versements, paramètres)';
 
 
 -- =============================================================================

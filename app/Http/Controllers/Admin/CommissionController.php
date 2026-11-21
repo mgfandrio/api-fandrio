@@ -193,19 +193,21 @@ class CommissionController extends Controller
                 ->select(
                     'c.comp_id',
                     'c.comp_nom',
-                    'c.comm_frequence_collecte',
+                    'c.comm_mode_versement',
+                    'c.comm_seuil_voyages',
                     DB::raw('SUM(r.montant_total) as brut'),
                     DB::raw('COUNT(r.res_id) as nb_reservations'),
                     DB::raw('SUM(r.nb_voyageurs) as billets')
                 )
-                ->groupBy('c.comp_id', 'c.comp_nom', 'c.comm_frequence_collecte')
+                ->groupBy('c.comp_id', 'c.comp_nom', 'c.comm_mode_versement', 'c.comm_seuil_voyages')
                 ->orderByDesc('brut')
                 ->limit(10)
                 ->get()
                 ->map(fn($item) => [
                     'comp_id'              => $item->comp_id,
                     'comp_nom'             => $item->comp_nom,
-                    'frequence_collecte'   => $item->comm_frequence_collecte ?? 'mensuelle',
+                    'mode_versement'       => $item->comm_mode_versement,
+                    'seuil_voyages'        => (int)$item->comm_seuil_voyages,
                     'brut'                 => (float)$item->brut,
                     'commission'           => round((float)$item->brut * $this->tauxCommission, 2),
                     'nb_reservations'      => (int)$item->nb_reservations,
@@ -311,7 +313,8 @@ class CommissionController extends Controller
                     'compagnie' => [
                         'comp_id'            => $compagnie->comp_id,
                         'comp_nom'           => $compagnie->comp_nom,
-                        'frequence_collecte' => $compagnie->comm_frequence_collecte ?? 'mensuelle',
+                        'mode_versement'     => $compagnie->comm_mode_versement,
+                        'seuil_voyages'      => (int)$compagnie->comm_seuil_voyages,
                     ],
                     'totaux' => [
                         'brut'            => $revenuBrut,
@@ -344,19 +347,20 @@ class CommissionController extends Controller
                     'c.comp_nom',
                     'c.comp_statut',
                     'c.comp_suspendu_commission',
-                    'c.comm_frequence_collecte',
+                    'c.comm_mode_versement',
+                    'c.comm_seuil_voyages',
                     DB::raw('SUM(r.montant_total) as brut'),
                     DB::raw('COUNT(r.res_id) as nb_reservations'),
                     DB::raw('SUM(r.nb_voyageurs) as billets')
                 )
-                ->groupBy('c.comp_id', 'c.comp_nom', 'c.comp_statut', 'c.comp_suspendu_commission', 'c.comm_frequence_collecte');
+                ->groupBy('c.comp_id', 'c.comp_nom', 'c.comp_statut', 'c.comp_suspendu_commission', 'c.comm_mode_versement', 'c.comm_seuil_voyages');
 
             // Filtres
             if ($request->filled('recherche')) {
                 $query->where('c.comp_nom', 'ILIKE', '%' . $request->recherche . '%');
             }
-            if ($request->filled('frequence')) {
-                $query->where('c.comm_frequence_collecte', $request->frequence);
+            if ($request->filled('mode')) {
+                $query->where('c.comm_mode_versement', $request->mode);
             }
             if ($request->boolean('suspendu')) {
                 $query->where('c.comp_suspendu_commission', true);
@@ -367,7 +371,8 @@ class CommissionController extends Controller
                 'comp_nom'           => $item->comp_nom,
                 'comp_statut'        => $item->comp_statut,
                 'suspendu'           => (bool)$item->comp_suspendu_commission,
-                'frequence_collecte' => $item->comm_frequence_collecte ?? 'mensuelle',
+                'mode_versement'     => $item->comm_mode_versement,
+                'seuil_voyages'      => (int)$item->comm_seuil_voyages,
                 'brut'               => (float)$item->brut,
                 'commission'         => round((float)$item->brut * $this->tauxCommission, 2),
                 'nb_reservations'    => (int)$item->nb_reservations,
@@ -423,37 +428,57 @@ class CommissionController extends Controller
     }
 
     /**
-     * Mettre à jour la fréquence et le jour de collecte pour une compagnie
+     * Paramètres de versement de la commission (réservé à l'admin système) :
+     * mode manuel/automatique et nombre de voyages par tranche.
+     * PATCH /admin/commissions/compagnies/{id}/versement
      */
-    public function updateFrequence(Request $request, int $compagnieId): JsonResponse
+    public function updateVersement(Request $request, int $compagnieId): JsonResponse
     {
         try {
             $compagnie = Compagnie::findOrFail($compagnieId);
 
-            $request->validate([
-                'frequence'     => 'sometimes|string|in:hebdomadaire,mensuelle',
-                'jour_collecte' => 'sometimes|nullable|string',
-            ]);
+            $donnees = $request->validate([
+                'mode'  => 'sometimes|string|in:manuel,automatique',
+                'seuil' => 'sometimes|integer|min:1|max:100',
+            ], [], ['mode' => 'mode de versement', 'seuil' => 'nombre de voyages']);
 
-            if ($request->filled('frequence')) {
-                $compagnie->comm_frequence_collecte = $request->frequence;
+            $avant = ['mode' => $compagnie->comm_mode_versement, 'seuil' => (int) $compagnie->comm_seuil_voyages];
+            if (isset($donnees['mode'])) {
+                $compagnie->comm_mode_versement = $donnees['mode'];
             }
-            if ($request->has('jour_collecte')) {
-                $compagnie->comm_jour_collecte = $request->jour_collecte;
+            if (isset($donnees['seuil'])) {
+                $compagnie->comm_seuil_voyages = $donnees['seuil'];
             }
             $compagnie->save();
 
+            $changements = [];
+            if ($avant['mode'] !== $compagnie->comm_mode_versement) {
+                $changements[] = 'mode ' . ($compagnie->comm_mode_versement === 'automatique' ? 'automatique' : 'manuel');
+            }
+            if ($avant['seuil'] !== (int) $compagnie->comm_seuil_voyages) {
+                $changements[] = "versement tous les {$compagnie->comm_seuil_voyages} voyages (avant : {$avant['seuil']})";
+            }
+            if ($changements) {
+                $this->commissions()->journaliser($compagnie->comp_id, 'parametres',
+                    'Paramètres modifiés : ' . implode(', ', $changements) . '.', null, $request->user()->util_id,
+                    \App\Models\Commissions\CollecteJournal::ACTEUR_ADMIN);
+                // Seuil abaissé : des tranches peuvent être dues tout de suite
+                $this->commissions()->genererTranches($compagnie->fresh());
+            }
+
             return response()->json([
                 'statut'  => true,
-                'message' => 'Configuration de collecte mise à jour.',
+                'message' => 'Paramètres de versement enregistrés.',
                 'data'    => [
-                    'comp_id'            => $compagnie->comp_id,
-                    'comp_nom'           => $compagnie->comp_nom,
-                    'frequence_collecte' => $compagnie->comm_frequence_collecte,
-                    'jour_collecte'      => $compagnie->comm_jour_collecte,
-                    'commission_active'  => $compagnie->comm_actif,
+                    'comp_id'           => $compagnie->comp_id,
+                    'comp_nom'          => $compagnie->comp_nom,
+                    'mode_versement'    => $compagnie->comm_mode_versement,
+                    'seuil_voyages'     => (int) $compagnie->comm_seuil_voyages,
+                    'commission_active' => $compagnie->comm_actif,
                 ]
             ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json(['statut' => false, 'message' => $e->getMessage(), 'errors' => $e->errors()], 422);
         } catch (\Exception $e) {
             return response()->json(['statut' => false, 'message' => 'Erreur: ' . $this->messageErreur($e)], 500);
         }
@@ -537,9 +562,13 @@ class CommissionController extends Controller
     public function detailCollecte(int $collecteId): JsonResponse
     {
         try {
-            $collecte = Collecte::with(['compagnie', 'confirmePar'])->findOrFail($collecteId);
+            $collecte = Collecte::with(['compagnie', 'confirmePar', 'initiePar'])->findOrFail($collecteId);
 
             $data = $this->formaterCollecte($collecte);
+            $data['voyages'] = $this->voyagesDeTranche($collecte);
+            $data['journal'] = \App\Models\Commissions\CollecteJournal::with('utilisateur:util_id,util_nom,util_prenom')
+                ->where('coll_id', $collecte->coll_id)->orderByDesc('created_at')->get()
+                ->map(fn($j) => $j->enTableau())->all();
 
             // Ajouter les détails de facturation
             $data['compagnie_detail'] = [
@@ -575,45 +604,15 @@ class CommissionController extends Controller
             if ($collecte->coll_statut !== Collecte::EN_ATTENTE) {
                 return response()->json([
                     'statut'  => false,
-                    'message' => 'Cette collecte a déjà été confirmée.'
+                    'message' => 'Ce versement a déjà été confirmé.'
                 ], 422);
             }
 
-            $adminId = $request->user()->util_id;
-
-            $collecte->update([
-                'coll_statut'            => Collecte::CONFIRMEE,
-                'coll_date_confirmation' => now(),
-                'coll_confirme_par'      => $adminId,
-            ]);
-
-            // Réactiver la compagnie si elle n'a plus aucune collecte en retard (source unique de vérité)
-            app(\App\Services\Commission\CommissionService::class)
-                ->reactiverCompagnieSiAJour($collecte->comp_id);
-
-            // Envoyer une notification aux admins de la compagnie
-            $admins = Utilisateur::where('comp_id', $collecte->comp_id)
-                ->where('util_role', 2)
-                ->where('util_statut', 1)
-                ->get();
-
-            $periodeDebut = $collecte->coll_periode_debut->format('d/m/Y');
-            $periodeFin   = $collecte->coll_periode_fin->format('d/m/Y');
-            $montant      = number_format((float)$collecte->coll_montant_commission, 0, ',', ' ') . ' Ar';
-
-            foreach ($admins as $admin) {
-                NotificationService::envoyer([
-                    'type'              => 8,
-                    'destinataire_type' => 2,
-                    'destinataire_id'   => $admin->util_id,
-                    'titre'             => 'Collecte de commission effectuée',
-                    'message'           => "La collecte du {$periodeDebut} au {$periodeFin} d'un montant de {$montant} a été effectuée aujourd'hui avec succès. Consultez le détail dans votre espace.",
-                ]);
-            }
+            $this->commissions()->marquerCollecteReglee($collecte, Collecte::MODE_MANUEL, null, $request->user()->util_id);
 
             return response()->json([
                 'statut'  => true,
-                'message' => 'Collecte confirmée avec succès. Notification envoyée à la compagnie.',
+                'message' => 'Versement confirmé. La compagnie a été prévenue.',
                 'data'    => $this->formaterCollecte($collecte->fresh()->load('compagnie')),
             ]);
         } catch (\Exception $e) {
@@ -648,34 +647,21 @@ class CommissionController extends Controller
                 return response()->json(['statut' => false, 'message' => 'Aucun administrateur actif à prévenir pour cette compagnie.'], 422);
             }
 
-            $periodeDebut = $collecte->coll_periode_debut->format('d/m/Y');
-            $periodeFin   = $collecte->coll_periode_fin->format('d/m/Y');
-            $montant      = number_format((float) $collecte->coll_montant_commission, 0, ',', ' ') . ' Ar';
-            $enRetard     = $collecte->coll_date_prevue && $collecte->coll_date_prevue->lt(today());
-            $echeance     = $collecte->coll_date_prevue ? $collecte->coll_date_prevue->format('d/m/Y') : null;
-
-            $titre   = $enRetard ? 'Rappel : commission en retard' : 'Rappel : commission à régler';
-            $message = "La commission FANDRIO du {$periodeDebut} au {$periodeFin} ({$montant}) "
-                . ($enRetard ? "devait être réglée le {$echeance}. " : ($echeance ? "est à régler avant le {$echeance}. " : 'est à régler. '))
-                . 'Réglez-la depuis Portefeuille > Payer la commission'
-                . ($enRetard ? ' pour que vos voyages restent visibles des clients.' : '.');
-
-            foreach ($admins as $admin) {
-                NotificationService::envoyer([
-                    'type'              => 8, // commission
-                    'destinataire_type' => 2, // compagnie
-                    'destinataire_id'   => $admin->util_id,
-                    'titre'             => $titre,
-                    'message'           => $message,
-                ]);
-            }
+            $service  = $this->commissions();
+            $montant  = $service->ariary($collecte->coll_montant_commission);
+            $jours    = \App\Services\Commission\CommissionService::joursEcoules($collecte);
+            $nbAdmins = $service->notifierAdmins($collecte->comp_id, 'Rappel de FANDRIO : commission à verser',
+                "La commission de {$montant} ({$collecte->coll_nb_voyages} voyage(s)) est à verser"
+                . ($jours > 0 ? " depuis {$jours} jour" . ($jours > 1 ? 's' : '') : '') . '. Versez-la depuis Portefeuille.');
+            $service->journaliser($collecte->comp_id, 'relance', "Relance envoyée par FANDRIO : {$montant} à verser.",
+                $collecte->coll_id, request()->user()?->util_id, \App\Models\Commissions\CollecteJournal::ACTEUR_ADMIN);
 
             \Illuminate\Support\Facades\Cache::put($cle, now()->toIso8601String(), now()->addHours(12));
 
             return response()->json([
                 'statut'  => true,
-                'message' => $admins->count() > 1
-                    ? "Relance envoyée aux {$admins->count()} administrateurs de la compagnie."
+                'message' => $nbAdmins > 1
+                    ? "Relance envoyée aux {$nbAdmins} administrateurs de la compagnie."
                     : 'Relance envoyée à la compagnie.',
             ]);
         } catch (\Exception $e) {
@@ -710,45 +696,68 @@ class CommissionController extends Controller
     public function historiqueCollectes(int $compagnieId): JsonResponse
     {
         try {
-            Compagnie::findOrFail($compagnieId);
+            $compagnie = Compagnie::findOrFail($compagnieId);
 
-            $collectes = Collecte::where('comp_id', $compagnieId)
+            $collectes = Collecte::with(['initiePar', 'confirmePar'])->where('comp_id', $compagnieId)
                 ->orderByDesc('coll_date_prevue')
                 ->get()
                 ->map(fn($c) => $this->formaterCollecte($c));
 
             return response()->json([
                 'statut' => true,
-                'data'   => ['collectes' => $collectes]
+                'data'   => [
+                    'collectes'       => $collectes,
+                    'parametres'      => [
+                        'mode_versement' => $compagnie->comm_mode_versement,
+                        'seuil_voyages'  => (int) $compagnie->comm_seuil_voyages,
+                        'suspendu'       => (bool) $compagnie->comp_suspendu_commission,
+                    ],
+                    'tranche_en_cours' => $this->commissions()->trancheEnCours($compagnie),
+                    'journal'         => $this->commissions()->journal($compagnie->comp_id, 100),
+                ]
             ]);
         } catch (\Exception $e) {
             return response()->json(['statut' => false, 'message' => 'Erreur: ' . $this->messageErreur($e)], 500);
         }
     }
 
-    /**
-     * Formater une collecte pour la réponse JSON
-     */
+    /** Format commun d'une tranche (source unique : CommissionService). */
     private function formaterCollecte(Collecte $collecte): array
     {
-        return [
-            'coll_id'              => $collecte->coll_id,
-            'comp_id'              => $collecte->comp_id,
-            'comp_nom'             => $collecte->compagnie?->comp_nom,
-            'periode_debut'        => $collecte->coll_periode_debut->format('d/m/Y'),
-            'periode_fin'          => $collecte->coll_periode_fin->format('d/m/Y'),
-            'periode_debut_raw'    => $collecte->coll_periode_debut->toDateString(),
-            'periode_fin_raw'      => $collecte->coll_periode_fin->toDateString(),
-            'montant_brut'         => (float)$collecte->coll_montant_brut,
-            'montant_commission'   => (float)$collecte->coll_montant_commission,
-            'taux'                 => (float)$collecte->coll_taux,
-            'nb_reservations'      => $collecte->coll_nb_reservations,
-            'nb_billets'           => $collecte->coll_nb_billets,
-            'statut'               => $collecte->coll_statut,
-            'statut_label'         => $collecte->coll_statut === Collecte::CONFIRMEE ? 'Confirmée' : 'En attente',
-            'date_prevue'          => $collecte->coll_date_prevue->format('d/m/Y'),
-            'date_confirmation'    => $collecte->coll_date_confirmation?->format('d/m/Y H:i'),
-            'created_at'           => $collecte->created_at?->format('d/m/Y H:i'),
-        ];
+        return $this->commissions()->formater($collecte);
+    }
+
+    private function commissions(): \App\Services\Commission\CommissionService
+    {
+        return app(\App\Services\Commission\CommissionService::class);
+    }
+
+    /** Voyages comptés dans une tranche, avec leur commission. */
+    private function voyagesDeTranche(Collecte $collecte): array
+    {
+        return DB::table('fandrio_app.voyages as v')
+            ->join('fandrio_app.trajets as t', 't.traj_id', '=', 'v.traj_id')
+            ->join('fandrio_app.provinces as pd', 'pd.pro_id', '=', 't.pro_depart')
+            ->join('fandrio_app.provinces as pa', 'pa.pro_id', '=', 't.pro_arrivee')
+            ->leftJoin('fandrio_app.reservations as r', function ($j) use ($collecte) {
+                $j->on('r.voyage_id', '=', 'v.voyage_id')->where('r.coll_id', '=', $collecte->coll_id);
+            })
+            ->where('v.coll_id', $collecte->coll_id)
+            ->groupBy('v.voyage_id', 'v.voyage_date', 'v.voyage_heure_depart', 'pd.pro_nom', 'pa.pro_nom')
+            ->orderBy('v.voyage_date')->orderBy('v.voyage_heure_depart')
+            ->get([
+                'v.voyage_id', 'v.voyage_date', 'v.voyage_heure_depart',
+                'pd.pro_nom as depart', 'pa.pro_nom as arrivee',
+                DB::raw('COALESCE(SUM(r.nb_voyageurs), 0) as billets'),
+                DB::raw('COALESCE(SUM(r.res_commission), 0) as commission'),
+            ])
+            ->map(fn($v) => [
+                'voyage_id'  => $v->voyage_id,
+                'date'       => \Carbon\Carbon::parse($v->voyage_date)->format('d/m/Y'),
+                'heure'      => substr((string) $v->voyage_heure_depart, 0, 5),
+                'trajet'     => $v->depart . ' → ' . $v->arrivee,
+                'billets'    => (int) $v->billets,
+                'commission' => (float) $v->commission,
+            ])->all();
     }
 }

@@ -101,8 +101,8 @@ class CompagnieController extends Controller
                 'provinces_desservies.*' => 'integer|exists:provinces,pro_id',
                 'modes_paiement' => 'sometimes|array',
                 'comp_localisation' => 'required|integer|exists:provinces,pro_id',
-                'comm_frequence_collecte' => 'sometimes|string|in:hebdomadaire,mensuelle',
-                'comm_jour_collecte' => 'sometimes|nullable|string',
+                'comm_mode_versement' => 'sometimes|string|in:manuel,automatique',
+                'comm_seuil_voyages' => 'sometimes|integer|min:1|max:100',
                 // PAPI (super-admin uniquement)
                 'papi_api_key' => 'sometimes|nullable|string|max:500',
                 'papi_webhook_secret' => 'sometimes|nullable|string|max:500',
@@ -244,8 +244,8 @@ class CompagnieController extends Controller
                 'provinces_desservies' => 'sometimes|array',
                 'provinces_desservies.*' => 'integer|exists:provinces,pro_id',
                 'modes_paiement' => 'sometimes|array',
-                'comm_frequence_collecte' => 'sometimes|string|in:hebdomadaire,mensuelle',
-                'comm_jour_collecte' => 'sometimes|nullable|string',
+                'comm_mode_versement' => 'sometimes|string|in:manuel,automatique',
+                'comm_seuil_voyages' => 'sometimes|integer|min:1|max:100',
                 // PAPI (super-admin uniquement) — champ vide = on garde la valeur existante
                 'papi_api_key' => 'sometimes|nullable|string|max:500',
                 'papi_webhook_secret' => 'sometimes|nullable|string|max:500',

@@ -34,26 +34,19 @@ class CommissionPaiementController extends Controller
             }
 
             if ((int) $collecte->coll_statut === Collecte::CONFIRMEE) {
-                return response()->json(['statut' => false, 'message' => 'Cette commission est déjà réglée.'], 422);
+                return response()->json(['statut' => false, 'message' => 'Cette commission est déjà versée.'], 422);
             }
 
             if (!$this->papi->estConfigure()) {
                 return response()->json(['statut' => false, 'message' => 'Paiement en ligne indisponible (PAPI non configuré).'], 503);
             }
 
-            $lien = $this->papi->creerLienPaiement([
-                'montant'          => (float) $collecte->coll_montant_commission,
-                'reference'        => 'COLLECTE-' . $collecte->coll_id,
-                'description'      => 'Commission FANDRIO ' . $collecte->coll_periode_debut->format('d/m/Y')
-                    . ' - ' . $collecte->coll_periode_fin->format('d/m/Y'),
-                'notification_url' => url('/api/papi/webhook/commission'),
-            ]);
-
-            // Trace la transaction en cours (mode PAPI)
-            $collecte->update([
-                'coll_mode'                => Collecte::MODE_PAPI,
-                'coll_papi_transaction_id' => $lien['transaction_id'],
-            ]);
+            $service = app(\App\Services\Commission\CommissionService::class);
+            $lien = $service->creerLien($collecte);
+            $collecte->update(['coll_initie_par' => $user->util_id]);
+            $service->journaliser($collecte->comp_id, 'versement_lance',
+                'Versement de ' . $service->ariary($collecte->coll_montant_commission) . ' lancé (paiement en ligne).',
+                $collecte->coll_id, $user->util_id, \App\Models\Commissions\CollecteJournal::ACTEUR_COMPAGNIE);
 
             return response()->json([
                 'statut' => true,

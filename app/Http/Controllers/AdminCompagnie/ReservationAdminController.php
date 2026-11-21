@@ -1239,68 +1239,38 @@ class ReservationAdminController extends Controller
         try {
             $compagnieId = $this->getCompagnieId();
             $compagnie = Compagnie::findOrFail($compagnieId);
+            $service = app(\App\Services\Commission\CommissionService::class);
 
-            // Configuration de collecte
-            $config = [
-                'frequence' => $compagnie->comm_frequence_collecte ?? 'mensuelle',
-                'jour_collecte' => $compagnie->comm_jour_collecte,
-                'commission_active' => $compagnie->comm_actif ?? true,
-                'taux' => 5,
-            ];
+            $collectes = Collecte::with(['initiePar', 'confirmePar'])
+                ->where('comp_id', $compagnieId)
+                ->orderByDesc('coll_date_prevue')->orderByDesc('coll_id')
+                ->limit(50)
+                ->get();
 
-            // Prochaine collecte prévue
-            $prochaineCollecte = Collecte::where('comp_id', $compagnieId)
-                ->where('coll_statut', Collecte::EN_ATTENTE)
-                ->orderBy('coll_date_prevue')
-                ->first();
-
-            // Historique des collectes
-            $collectes = Collecte::where('comp_id', $compagnieId)
-                ->orderByDesc('coll_date_prevue')
-                ->limit(20)
-                ->get()
-                ->map(fn($c) => [
-                    'coll_id'            => $c->coll_id,
-                    'periode_debut'      => $c->coll_periode_debut->format('d/m/Y'),
-                    'periode_fin'        => $c->coll_periode_fin->format('d/m/Y'),
-                    'montant_brut'       => (float)$c->coll_montant_brut,
-                    'montant_commission' => (float)$c->coll_montant_commission,
-                    'taux'               => (float)$c->coll_taux,
-                    'nb_reservations'    => $c->coll_nb_reservations,
-                    'nb_billets'         => $c->coll_nb_billets,
-                    'statut'             => $c->coll_statut,
-                    'statut_label'       => $c->coll_statut === Collecte::CONFIRMEE ? 'Confirmée' : 'En attente',
-                    'date_prevue'        => $c->coll_date_prevue->format('d/m/Y'),
-                    'date_confirmation'  => $c->coll_date_confirmation?->format('d/m/Y H:i'),
-                    'payable'            => $c->coll_statut === Collecte::EN_ATTENTE,
-                    'en_retard'          => $c->coll_statut === Collecte::EN_ATTENTE && $c->coll_date_prevue->lt(today()),
-                ]);
-
-            // Totaux
-            $totalCollecte = Collecte::where('comp_id', $compagnieId)
-                ->where('coll_statut', Collecte::CONFIRMEE)
-                ->sum('coll_montant_commission');
-
-            $totalEnAttente = Collecte::where('comp_id', $compagnieId)
-                ->where('coll_statut', Collecte::EN_ATTENTE)
-                ->sum('coll_montant_commission');
+            $aVerser = $collectes->where('coll_statut', Collecte::EN_ATTENTE)->sortBy('coll_id')->values();
 
             return response()->json([
                 'statut' => true,
                 'data' => [
-                    'config' => $config,
-                    'suspendu' => (bool) $compagnie->comp_suspendu_commission,
-                    'prochaine_collecte' => $prochaineCollecte ? [
-                        'date_prevue' => $prochaineCollecte->coll_date_prevue->format('d/m/Y'),
-                        'montant' => (float)$prochaineCollecte->coll_montant_commission,
-                        'periode' => $prochaineCollecte->coll_periode_debut->format('d/m/Y') . ' → ' . $prochaineCollecte->coll_periode_fin->format('d/m/Y'),
-                    ] : null,
-                    'totaux' => [
-                        'total_collecte' => (float)$totalCollecte,
-                        'total_en_attente' => (float)$totalEnAttente,
-                        'nb_collectes' => $collectes->count(),
+                    'config' => [
+                        'mode_versement'    => $compagnie->comm_mode_versement,
+                        'seuil_voyages'     => (int) $compagnie->comm_seuil_voyages,
+                        'commission_active' => (bool) ($compagnie->comm_actif ?? true),
+                        'taux'              => 5,
+                        'avertissement_jours' => \App\Services\Commission\CommissionService::AVERTISSEMENT_JOURS,
+                        'suspension_jours'  => \App\Services\Commission\CommissionService::GRACE_DAYS,
+                        'delai_max_jours'   => \App\Services\Commission\CommissionService::DELAI_MAX_JOURS,
                     ],
-                    'collectes' => $collectes,
+                    'suspendu' => (bool) $compagnie->comp_suspendu_commission,
+                    'tranche_en_cours' => $service->trancheEnCours($compagnie),
+                    'a_verser' => $aVerser->map(fn($c) => $service->formater($c))->all(),
+                    'totaux' => [
+                        'total_collecte'   => (float) Collecte::where('comp_id', $compagnieId)->where('coll_statut', Collecte::CONFIRMEE)->sum('coll_montant_commission'),
+                        'total_en_attente' => (float) $aVerser->sum('coll_montant_commission'),
+                        'nb_collectes'     => $collectes->count(),
+                    ],
+                    'collectes' => $collectes->map(fn($c) => $service->formater($c))->all(),
+                    'journal'   => $service->journal($compagnieId, 50),
                 ],
             ]);
         } catch (\Exception $e) {

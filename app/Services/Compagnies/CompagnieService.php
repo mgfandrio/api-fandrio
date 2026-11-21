@@ -43,8 +43,8 @@ class CompagnieService
                 'comp_adresse' => $compagnieDTO->compAdresse,
                 'comp_localisation' => $compagnieDTO->compLocalisation,
                 'comp_statut' => 1, // Actif par défaut
-                'comm_frequence_collecte' => $compagnieDTO->commFrequenceCollecte ?? 'mensuelle',
-                'comm_jour_collecte' => $compagnieDTO->commJourCollecte,
+                'comm_mode_versement' => $compagnieDTO->commModeVersement ?? 'manuel',
+                'comm_seuil_voyages' => $compagnieDTO->commSeuilVoyages ?? 5,
                 // Identifiants PAPI (chiffrés par le cast du modèle) — null si non fournis
                 'comp_papi_api_key' => $compagnieDTO->papiApiKey ?: null,
                 'comp_papi_webhook_secret' => $compagnieDTO->papiWebhookSecret ?: null,
@@ -273,12 +273,15 @@ class CompagnieService
                 'comp_localisation' => $compagnieDTO->compLocalisation,
             ];
 
-            if ($compagnieDTO->commFrequenceCollecte) {
-                $updateData['comm_frequence_collecte'] = $compagnieDTO->commFrequenceCollecte;
+            // Versement de la commission (admin système) : tracé dans le journal si modifié
+            $changementsVersement = [];
+            if ($compagnieDTO->commModeVersement && $compagnieDTO->commModeVersement !== $compagnie->comm_mode_versement) {
+                $updateData['comm_mode_versement'] = $compagnieDTO->commModeVersement;
+                $changementsVersement[] = 'mode ' . $compagnieDTO->commModeVersement;
             }
-
-            if ($compagnieDTO->commJourCollecte !== null) {
-                $updateData['comm_jour_collecte'] = $compagnieDTO->commJourCollecte;
+            if ($compagnieDTO->commSeuilVoyages && $compagnieDTO->commSeuilVoyages !== (int) $compagnie->comm_seuil_voyages) {
+                $updateData['comm_seuil_voyages'] = $compagnieDTO->commSeuilVoyages;
+                $changementsVersement[] = "versement tous les {$compagnieDTO->commSeuilVoyages} voyages (avant : {$compagnie->comm_seuil_voyages})";
             }
 
             // PAPI : « champ vide = on garde la valeur existante » (jamais écrasée par du vide)
@@ -293,6 +296,11 @@ class CompagnieService
             }
 
             $compagnie->update($updateData);
+            if ($changementsVersement) {
+                app(\App\Services\Commission\CommissionService::class)->journaliser(
+                    $compagnie->comp_id, 'parametres', 'Paramètres modifiés : ' . implode(', ', $changementsVersement) . '.',
+                    null, auth()->id(), \App\Models\Commissions\CollecteJournal::ACTEUR_ADMIN);
+            }
 
             // Mettre à jour les provinces desservies
             if (isset($compagnieDTO->provincesDesservies)) {
@@ -572,8 +580,8 @@ class CompagnieService
             'adresse' => $compagnie->comp_adresse,
             'statut' => $compagnie->comp_statut,
             'logo' => $compagnie->comp_logo,
-            'frequence_collecte' => $compagnie->comm_frequence_collecte ?? 'mensuelle',
-            'jour_collecte' => $compagnie->comm_jour_collecte,
+            'mode_versement' => $compagnie->comm_mode_versement ?? 'manuel',
+            'seuil_voyages' => (int) ($compagnie->comm_seuil_voyages ?? 5),
             'commission_active' => $compagnie->comm_actif ?? true,
             'mode_vip' => (bool) $compagnie->comp_mode_vip,
             'mode_premium' => (bool) $compagnie->comp_mode_premium,

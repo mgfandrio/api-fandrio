@@ -15,8 +15,8 @@ class CompagnieDTO
         public ?int $compLocalisation = null,
         public array $provincesDesservies = [],
         public array $modesPaiement = [],
-        public ?string $commFrequenceCollecte = null,
-        public ?string $commJourCollecte = null,
+        public ?string $commModeVersement = null,
+        public ?int $commSeuilVoyages = null,
         public ?string $papiApiKey = null,
         public ?string $papiWebhookSecret = null,
         public ?bool $papiActif = null
@@ -35,8 +35,8 @@ class CompagnieDTO
             compLocalisation: $data['comp_localisation'] ?? null,
             provincesDesservies: $data['provinces_desservies'] ?? [],
             modesPaiement: $data['modes_paiement'] ?? [],
-            commFrequenceCollecte: $data['comm_frequence_collecte'] ?? null,
-            commJourCollecte: $data['comm_jour_collecte'] ?? null,
+            commModeVersement: $data['comm_mode_versement'] ?? null,
+            commSeuilVoyages: isset($data['comm_seuil_voyages']) ? (int) $data['comm_seuil_voyages'] : null,
             papiApiKey: $data['papi_api_key'] ?? null,
             papiWebhookSecret: $data['papi_webhook_secret'] ?? null,
             papiActif: array_key_exists('papi_actif', $data) ? (bool) $data['papi_actif'] : null

@@ -217,7 +217,7 @@ Route::middleware(['api.key', 'auth:api', 'compte', 'role:3'])->prefix('admin')-
         Route::get('/compagnies', [CommissionController::class, 'listeCompagnies']);
         Route::get('/compagnies/{compagnieId}', [CommissionController::class, 'detailCompagnie']);
         Route::patch('/{commId}/statut', [CommissionController::class, 'confirmerReception']);
-        Route::patch('/compagnies/{compagnieId}/frequence', [CommissionController::class, 'updateFrequence']);
+        Route::patch('/compagnies/{compagnieId}/versement', [CommissionController::class, 'updateVersement']);
         Route::patch('/compagnies/{compagnieId}/toggle', [CommissionController::class, 'toggleCommission']);
 
         // Collectes
